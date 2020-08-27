@@ -7,9 +7,9 @@
 
 import time
 import numpy as np
-from bert_serving.client import BertClient
-from utils import load_json, cos_dist, load_npy
 
+from utils import load_json, cos_dist
+from enc_client import EncodeClient
 
 def init():
     '''加载预处理数据
@@ -23,7 +23,7 @@ def init():
 
 print('start loading')
 faq_data, topics, corpus_mat, corpus_mat_norm = init()
-client = BertClient()
+client = EncodeClient()
 print('end loading...')
 
 

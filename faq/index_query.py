@@ -5,10 +5,11 @@
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
 import numpy as np
-from bert_serving.client import BertClient
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+
 from utils import load_json, save_json
+from enc_client import EncodeClient
 
 
 def index_query():
@@ -29,8 +30,8 @@ def index_query():
             posts.append(post)
             topics.append(topic)
 
-    client = BertClient()
-    dataloader = tqdm(DataLoader(posts, batch_size=512, shuffle=False),
+    client = EncodeClient()
+    dataloader = tqdm(DataLoader(posts, batch_size=128, shuffle=False),
                       desc='Iteration')
 
     encs = []
@@ -42,6 +43,7 @@ def index_query():
 
     corpus_mat = np.asarray(encs)
     np.save('hflqa/corpus_mat.npy', corpus_mat)
+
 
 if __name__ == '__main__':
     index_query()

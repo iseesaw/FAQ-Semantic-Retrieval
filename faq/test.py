@@ -13,32 +13,32 @@ import pandas as pd
 import numpy as np
 
 from tqdm import tqdm
-from bert_serving.client import BertClient
 from torch.utils.data import DataLoader
 from sklearn.metrics.pairwise import cosine_similarity
+
 from utils import load_json, cos_dist
+from enc_client import EncodeClient
 
 
 def dis_test():
     '''BERT embedding 计算相似度
     '''
-    bc = BertClient()
-    df = pd.read_csv('pos.csv')
-    scores = []
-    query_loader = tqdm(DataLoader(df['query'], batch_size=2048,
+    client = EncodeClient()
+    df = pd.read_csv('lcqmc/LCQMC_dev.csv')
+    sent1_loader = tqdm(DataLoader(df['sentence1'][:3],
+                                   batch_size=1,
                                    shuffle=False),
                         desc='Iteration')
-    answer_loader = DataLoader(df['answer'], batch_size=2048, shuffle=False)
+    sent2_loader = DataLoader(df['sentence2'][:3], batch_size=1, shuffle=False)
+
     cos = nn.CosineSimilarity()
-
-    for query_batch, answer_batch in zip(query_loader, answer_loader):
-        query_enc = bc.encode(query_batch)
-        answer_enc = bc.encode(answer_batch)
-        score = cos(torch.tensor(query_enc), torch.tensor(answer_enc)).tolist()
-        scores.extend(score)
-
-    df = pd.DataFrame(data={'score': scores})
-    df.to_csv('pos_dis.csv')
+    for sent1_batch, sent2_batch in zip(sent1_loader, sent2_loader):
+        sent1_enc = client.encode(sent1_batch)
+        sent2_enc = client.encode(sent2_batch)
+        score = cos(torch.tensor(sent1_enc), torch.tensor(sent2_enc)).tolist()
+        print('------')
+        print(sent1_batch, sent2_batch)
+        print(score)
 
 
 def construct_pos():
@@ -64,7 +64,6 @@ def construct_pos():
 
     print(df.shape)
     # (339886, 3)
-
 
 
 def cost_test():
@@ -100,3 +99,6 @@ def cost_test():
     print(np.argmax(scores))
     t4 = time.time()
     print(t4 - t3)
+
+if __name__ == '__main__':
+    dis_test()
