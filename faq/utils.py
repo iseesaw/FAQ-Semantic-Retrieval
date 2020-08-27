@@ -40,6 +40,17 @@ def save_json(data, filename):
     with open(filename, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
+
+def load_npy(filename):
+    with open(filename, 'rb') as f:
+        return np.load(f)
+
+
+def save_npy(data, filename):
+    with open(filename, 'wb') as f:
+        np.save(f, data)
+
+
 def cos_dist(query_vec, corpus_mat, corpus_norm_mat=None):
     '''余弦相似度计算
     

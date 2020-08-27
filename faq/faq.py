@@ -8,14 +8,13 @@
 import time
 import numpy as np
 from bert_serving.client import BertClient
-from utils import load_json, cos_dist
+from utils import load_json, cos_dist, load_npy
 
 
 def init():
     '''加载预处理数据
     '''
     faq_data = load_json('hflqa/faq.json')
-    index_data = load_json('hflqa/index.json')
     corpus_mat = np.load('hflqa/corpus_mat.npy')
     topics = load_json('hflqa/topics.json')
     corpus_mat_norm = np.linalg.norm(corpus_mat)

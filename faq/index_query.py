@@ -4,7 +4,7 @@
 # @Author  : Kaiyan Zhang (minekaiyan@gmail.com)
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
-import torch
+import numpy as np
 from bert_serving.client import BertClient
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -38,11 +38,10 @@ def index_query():
         enc = client.encode(batch)
         encs.extend(enc.tolist())
 
-    enc_data = []
-    for t, p, e in zip(topics, posts, encs):
-        enc_data.append({'topic': t, 'post': p, 'enc': e})
+    save_json(topics, 'hflqa/topics.json')
 
-    save_json(enc_data, 'hflqa/index.json')
+    corpus_mat = np.asarray(encs)
+    np.save('hflqa/corpus_mat.npy', corpus_mat)
 
 if __name__ == '__main__':
     index_query()
