@@ -16,6 +16,9 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from sklearn.metrics.pairwise import cosine_similarity
 
+from sentence_transformers import SentenceTransformer, util
+import numpy as np
+
 from utils import load_json, cos_dist
 from enc_client import EncodeClient
 
@@ -100,5 +103,33 @@ def cost_test():
     t4 = time.time()
     print(t4 - t3)
 
+
+def sentence_transformers_test(top_k=5):
+    data = load_json('hflqa/faq.json')
+    corpus = []
+    for _, post_replys in data.items():
+        corpus.extend(post_replys['post'])
+
+    embedder = SentenceTransformer('/users6/kyzhang/embeddings/distilbert/distilbert-multilingual-nli-stsb-quora-ranking/')
+
+    corpus_embeddings = embedder.encode(corpus, convert_to_tensor=True)
+    while True:
+        query = input('Enter: ')
+        query_embeddings = embedder.encode([query], convert_to_tensor=True)
+        cos_scores = util.pytorch_cos_sim(query_embeddings,
+                                          corpus_embeddings)[0]
+
+        #We use np.argpartition, to only partially sort the top_k results
+        top_results = np.argpartition(-cos_scores, range(top_k))[0:top_k]
+
+        print("\n\n======================\n\n")
+        print("Query:", query)
+        print("\nTop 5 most similar sentences in corpus:")
+
+        for idx in top_results[0:top_k]:
+            print(corpus[idx].strip(), "(Score: %.4f)" % (cos_scores[idx]))
+
+
 if __name__ == '__main__':
-    dis_test()
+    # dis_test()
+    sentence_transformers_test()
