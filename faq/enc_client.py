@@ -10,6 +10,8 @@ from transformers import AutoTokenizer, AutoModel, BertTokenizer
 
 
 class EncodeClient:
+    '''封装基于 Transformers 的句子编码器
+    '''
     def __init__(
         self,
         model_name_or_path='/users6/kyzhang/embeddings/bert/bert-base-chinese',

@@ -21,6 +21,7 @@ def index_query():
             enc: bert_
         }
     ]
+    保存向量矩阵和对应的主题
     '''
     data = load_json('hflqa/faq.json')
 

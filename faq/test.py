@@ -104,15 +104,31 @@ def cost_test():
     print(t4 - t3)
 
 
-def sentence_transformers_test(top_k=5):
-    data = load_json('hflqa/faq.json')
+def get_faq_corpus_embeddings(embedder, filename='hflqa/faq.json'):
+    '''读取 faq 数据并使用 sentence-transformers 进行向量编码
+    '''
+    data = load_json(filename)
     corpus = []
     for _, post_replys in data.items():
         corpus.extend(post_replys['post'])
 
-    embedder = SentenceTransformer('/users6/kyzhang/embeddings/distilbert/distilbert-multilingual-nli-stsb-quora-ranking/')
+    corpus_embeddings = embedder.encode(corpus,
+                                        show_progress_bar=True,
+                                        convert_to_tensor=True)
+    return corpus, corpus_embeddings
 
-    corpus_embeddings = embedder.encode(corpus, convert_to_tensor=True)
+
+def sentence_transformers_test(top_k=5):
+    '''使用 sentence-transformers 进行向量编码
+    使用 util.pytorch_cos_sim 计算余弦相似度
+    使用 np.argpartition 获取 topk
+    '''
+    embedder = SentenceTransformer(
+        '/users6/kyzhang/embeddings/distilbert/distilbert-multilingual-nli-stsb-quora-ranking/'
+    )
+
+    corpus, corpus_embeddings = get_faq_corpus_embeddings(embedder)
+
     while True:
         query = input('Enter: ')
         query_embeddings = embedder.encode([query], convert_to_tensor=True)
@@ -128,6 +144,37 @@ def sentence_transformers_test(top_k=5):
 
         for idx in top_results[0:top_k]:
             print(corpus[idx].strip(), "(Score: %.4f)" % (cos_scores[idx]))
+
+
+def sentence_search_test():
+    '''使用 sentence-transformers 进行向量编码
+    调用 util.sementic_search 进行语义召回检索前 topk
+    '''
+    embedder = SentenceTransformer(
+        '/users6/kyzhang/embeddings/distilbert/distilbert-multilingual-nli-stsb-quora-ranking/'
+    )
+
+    corpus, corpus_embeddings = get_faq_corpus_embeddings(embedder)
+    print("Corpus loaded with {} sentences / embeddings".format(
+        len(corpus_embeddings)))
+
+    while True:
+        inp_question = input("Please enter a question: ")
+
+        start_time = time.time()
+        question_embedding = embedder.encode(inp_question,
+                                             convert_to_tensor=True)
+        hits = util.semantic_search(question_embedding, corpus_embeddings)
+        end_time = time.time()
+        hits = hits[0]  #Get the hits for the first query
+
+        print("Input question:", inp_question)
+        print("Results (after {:.3f} seconds):".format(end_time - start_time))
+        for hit in hits[:5]:
+            print("\t{:.3f}\t{}".format(hit['score'],
+                                        corpus[hit['corpus_id']]))
+
+        print("\n\n========\n")
 
 
 if __name__ == '__main__':
