@@ -95,9 +95,9 @@ reply.json()
 [Sentence-Transformers](https://www.sbert.net/index.html) 是一个基于 [Transformers](https://huggingface.co/transformers/) 库的句向量表示 Python 框架，内置语义检索以及多种文本（对）相似度损失函数，可以较快的实现模型和语义检索，并提供多种[预训练的模型](https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/)，包括中文在内的多语言模型
 
 ```python
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, model
 
-# 加载内置模型
+# 加载内置模型 (https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/)
 model = SentenceTransformer('distilbert-base-nli-stsb-mean-tokens')
 
 sentences = ['This framework generates embeddings for each input sentence',
@@ -107,6 +107,25 @@ sentences = ['This framework generates embeddings for each input sentence',
 # 句子编码
 embeddings = model.encode(sentences)
 ```
+
+> 如果需要加载 HuggingFace 的预训练模型，需要指定特定的类，比如使用 `bert-base-chinese` ，[#issue75](https://github.com/UKPLab/sentence-transformers/issues/75#issuecomment-568717443)
+>
+> ```python
+> from sentence_transformers import models
+> 
+> model_name = 'bert-base-chinese'
+> 
+> # 使用 BERT 作为 encoder
+> word_embedding_model = models.BERT(model_name)
+> 
+> # 使用 mean pooling 获得句向量表示
+> pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(),
+>                                pooling_mode_mean_tokens=True,
+>                                pooling_mode_cls_token=False,
+>                                pooling_mode_max_tokens=False)
+> 
+> model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
+> ```
 
 
 
@@ -151,6 +170,14 @@ sentence_embeddings = mean_pooling(model_output, encoded_input['attention_mask']
 
 
 ## BERT 微调与蒸馏
+
+### 数据集
+
+[文本相似度数据集](https://github.com/IceFlameWorm/NLP_Datasets)
+
+FAQ 数据集
+
+内部 FAQ 数据集
 
 ### 负采样
 
@@ -292,18 +319,26 @@ $$
 
 fine-tune 可以使用高度封装的 [Sentence-Transformers](https://www.sbert.net/index.html)  快速搭建模型，或者使用 [Transformers](https://huggingface.co/transformers/) 更灵活地实现自定义模型
 
+| 框架                                                      | 优点                                                         | 缺点               |
+| --------------------------------------------------------- | ------------------------------------------------------------ | ------------------ |
+| [Sentence-Transformers](https://www.sbert.net/index.html) | 简单易用<br />内置多种 Ranking loss<br />插件式模块使用<br />主要用于句对分类任务 | 不支持多GPU训练    |
+| [Transformers](https://huggingface.co/transformers/)      | 内置多种训练机制<br />包括半精度、分布式训练等<br />自定义程度较高，适合各种任务 | Ranking loss自定义 |
+
+
+
 - [Sentence-Transformers](https://www.sbert.net/index.html) 
 
   - 可以进行多种任务的fine-tune，这里可以选择类似的 [Quora Duplicate Questions](https://www.sbert.net/examples/training/quora_duplicate_questions/README.html) 作为参考，即判断两个问题是否相似，标签为 0 和 1
 
-  - 首先需要初始化预训练模型，`model_name` 可以是 Sentece-Transformers 或者 Transformers 支持的模型，比如 `bert-base-chinese`
+  - 首先需要初始化预训练模型，`model_name` 必须是 Sentece-Transformers [内置的预训练模型](https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/)
 
     ```python
     from sentence_transformers import SentenceTransformer, models
+    # 加载内置预训练模型
     model = SentenceTransformer('model_name')
     
-    # 可以自定义模块
-    #word_embedding_model = models.Transformer('bert-base-uncased', max_seq_length=256)
+    # 可以自定义模块 或 使用 HugginFace Transformers 预训练模型
+    #word_embedding_model = models.Transformer('bert-base-chinese', max_seq_length=256)
     # 可以选择使用 cls/max/mean 等多种 pooling 方式
     #pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
     #model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
@@ -358,57 +393,33 @@ fine-tune 可以使用高度封装的 [Sentence-Transformers](https://www.sbert.
 
 > 高度封装，训练流程和 sklearn 以及 keras 类似，简单容易理解
 >
-> 更多参考 [sentence-transformers/examples](https://github.com/UKPLab/sentence-transformers/tree/master/examples)
+> 不支持多GPU训练，[Multi-GPU-training #311](https://github.com/UKPLab/sentence-transformers/issues/311#issuecomment-659455875)
+>
+> 更多例子参考 [sentence-transformers/examples](https://github.com/UKPLab/sentence-transformers/tree/master/examples)
 
 
 
 - [Transformers](https://huggingface.co/transformers/)
 
   - 除了使用 [SentenceTransformers](https://www.sbert.net/index.html) ，也可以直接使用 [Transformers](https://huggingface.co/transformers/) 的 [Trainer](https://huggingface.co/transformers/main_classes/trainer.html) 接口进行快速模型训练
-
-  - 首先初始化模型
-
-    ```python
-    import torch
-    
-    from transformers import AutoModel, AutoTokenizer, Trainer, TrainingArguments
-    
-    model = AutoModel.from_pretrained('bert-base-chinese')
-    tokenizer = AutoTokenizer.from_pretrained('bert-base-chinese')
-    
-    training_args = TrainingArguments(
-    	output_dir = './output',
-      num_train_epochs=1,
-      per_device_train_batch_size=16,
-      per_device_eval_batch_size=64,
-      warmup_steps=500,
-      weight_decay=0.01,
-      evaluate_during_training=True,
-      logging_dir='./logs'
-    )
-    
-    trainer = Trainer(
-    	model=model,
-      args=training_args,
-      compute_metrics=compute_metrics,
-      train_dataset=train_dataset,
-      eval_dataset=test_dataset
-    )
-    
-    trainer.train()
-    
-    trainer.evaluate()
-    
-    # tensorboard --logdir logs
-    ```
-
-    
+- 读取所有句对保存 List[InputExample]
+  - 初始化 SiameseDataset(examples, tokenizer)
+- 实现 `__getitem__` 方法，返回句对的 id 表示，Tuple(List[int], List[int]), label
+  
+  - 实现 DataLoader 的 collator 方法
+    - 重点是在每个batch内部进行补齐，但需要速度快，那么分词得提前完成
+    - 输入 List[Tuple(List[int], List[int]), label]，输出 {features: [{input: tensor, mask: tensor}, {intput: tensor, mask:tensor}], labels: Tensor()}
+    - features[0]，features[1] 分别进行 padding
+    - tocuda
+  
+  - 调用模型，分别输入 features，{input: tensor, mask: tensor}，获得 batch 的句向量
+  - 然后计算句对的余弦相似度并返回 loss
 
 
 
 ### 模型蒸馏
 
-使用 TextBrewer 蒸馏小模型，比较性能
+ [TextBrewer](https://github.com/airaria/TextBrewer) 基于 Transformers 的模型蒸馏工具
 
 
 
