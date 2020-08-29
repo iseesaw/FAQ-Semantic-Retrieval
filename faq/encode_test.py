@@ -4,20 +4,19 @@
 # @Author  : Kaiyan Zhang (minekaiyan@gmail.com)
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
+
 import time
+import numpy as np
+import pandas as pd
+
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
-
-import pandas as pd
-import numpy as np
-
-from tqdm import tqdm
 from torch.utils.data import DataLoader
-from sklearn.metrics.pairwise import cosine_similarity
 
+from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer, util
-import numpy as np
 
 from utils import load_json, cos_dist
 from enc_client import EncodeClient
@@ -123,9 +122,7 @@ def sentence_transformers_test(top_k=5):
     使用 util.pytorch_cos_sim 计算余弦相似度
     使用 np.argpartition 获取 topk
     '''
-    embedder = SentenceTransformer(
-        '/users6/kyzhang/embeddings/distilbert/distilbert-multilingual-nli-stsb-quora-ranking/'
-    )
+    embedder = SentenceTransformer('bert-base-chinese')
 
     corpus, corpus_embeddings = get_faq_corpus_embeddings(embedder)
 
@@ -133,7 +130,7 @@ def sentence_transformers_test(top_k=5):
         query = input('Enter: ')
         query_embeddings = embedder.encode([query], convert_to_tensor=True)
         cos_scores = util.pytorch_cos_sim(query_embeddings,
-                                          corpus_embeddings)[0]
+                                          corpus_embeddings)[0].cpu()
 
         #We use np.argpartition, to only partially sort the top_k results
         top_results = np.argpartition(-cos_scores, range(top_k))[0:top_k]
@@ -146,13 +143,12 @@ def sentence_transformers_test(top_k=5):
             print(corpus[idx].strip(), "(Score: %.4f)" % (cos_scores[idx]))
 
 
-def sentence_search_test():
+def sentence_search_test(topk=5):
     '''使用 sentence-transformers 进行向量编码
     调用 util.sementic_search 进行语义召回检索前 topk
     '''
     embedder = SentenceTransformer(
-        '/users6/kyzhang/embeddings/distilbert/distilbert-multilingual-nli-stsb-quora-ranking/'
-    )
+        './output/training-OnlineConstrativeLoss-LCQMC', device='cuda')
 
     corpus, corpus_embeddings = get_faq_corpus_embeddings(embedder)
     print("Corpus loaded with {} sentences / embeddings".format(
@@ -164,13 +160,16 @@ def sentence_search_test():
         start_time = time.time()
         question_embedding = embedder.encode(inp_question,
                                              convert_to_tensor=True)
+        # （num_query, num_corpus）
         hits = util.semantic_search(question_embedding, corpus_embeddings)
         end_time = time.time()
-        hits = hits[0]  #Get the hits for the first query
+
+        # Get the hits for the first query
+        hits = hits[0]
 
         print("Input question:", inp_question)
         print("Results (after {:.3f} seconds):".format(end_time - start_time))
-        for hit in hits[:5]:
+        for hit in hits[:topk]:
             print("\t{:.3f}\t{}".format(hit['score'],
                                         corpus[hit['corpus_id']]))
 

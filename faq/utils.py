@@ -6,6 +6,7 @@
 # @Version : 1.0.0
 import json
 import numpy as np
+import pandas as pd
 
 
 def cos_dist(query_vec, corpus_mat, corpus_norm_mat=None):
