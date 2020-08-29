@@ -6,11 +6,11 @@
 # @Version : 1.0.0
 
 import torch
-from transformers import AutoTokenizer, AutoModel, BertTokenizer
+from transformers import AutoTokenizer, AutoModel
 
 
 class EncodeClient:
-    '''封装基于 Transformers 的句子编码器
+    '''封装基于 Transformers 的句向量编码器
     '''
     def __init__(
         self,

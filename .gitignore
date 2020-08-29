@@ -7,3 +7,4 @@ faq/hflqa/
 faq/lcqmc/
 faq/output/
 *.DS_Store
+*/logs/
