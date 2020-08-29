@@ -5,20 +5,133 @@
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
 import os
+import pprint
 import argparse
 import pandas as pd
+from tokenizers.pre_tokenizers import PreTokenizer
+from tqdm import tqdm
+from typing import Union, List
 
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 
-from transformers import BertPreTrainedModel, BertModel, BertTokenizer, Trainer, TrainingArguments
+from transformers import BertPreTrainedModel, BertModel, PreTrainedTokenizer, BertTokenizer, Trainer, TrainingArguments
+
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
-'''
-基于 Trainer 的版本
-可以自定义模块，参考 BertForSequenceClasification
-https://github.com/huggingface/transformers/blob/9336086ab5d232cccd9512333518cf4299528882/src/transformers/modeling_bert.py#L1277
-'''
+"""
+基于 Transformers Trainer 的 SiameseNetwork
+"""
+
+
+class InputExample:
+    """
+    Structure for one input example with texts, the label and a unique id
+    """
+    def __init__(self,
+                 guid: str = '',
+                 texts: List[str] = None,
+                 texts_tokenized: List[List[int]] = None,
+                 label: Union[int, float] = None):
+        """
+        Creates one InputExample with the given texts, guid and label
+
+        str.strip() is called on both texts.
+
+        :param guid
+            id for the example
+        :param texts
+            the texts for the example
+        :param texts_tokenized
+            Optional: Texts that are already tokenized. If texts_tokenized is passed, texts must not be passed.
+        :param label
+            the label for the example
+        """
+        self.guid = guid
+        self.texts = [text.strip()
+                      for text in texts] if texts is not None else texts
+        self.texts_tokenized = texts_tokenized
+        self.label = label
+
+    def __str__(self):
+        return "<InputExample> label: {}, texts: {}".format(
+            str(self.label), "; ".join(self.texts))
+
+
+class SiameseDataset(Dataset):
+    def __init__(self, examples: List[InputExample],
+                 tokenizer: PreTrainedTokenizer):
+        """
+        Create a new SentencesDataset with the tokenized texts and the labels as Tensor
+
+        :param examples
+            A list of sentence.transformers.readers.InputExample
+        :param model
+            SentenceTransformerModel
+        """
+        self.tokenizer = tokenizer
+        self.examples = examples
+
+    def __getitem__(self, item):
+        """
+        :return List[List[str]]
+        """
+        label = torch.tensor(self.examples[item].label, dtype=torch.long)
+
+        # 分词, 使用 InputExample 保存避免多次重复
+        if self.examples[item].texts_tokenized is None:
+            self.examples[item].texts_tokenized = [
+                self.tokenizer.tokenize(text)
+                for text in self.examples[item].texts
+            ]
+
+        return self.examples[item].texts_tokenized, label
+
+    def __len__(self):
+        return len(self.examples)
+
+
+class Collator:
+    def __init__(self, tokenizer, max_length):
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def batching_collate(self, batch):
+        """
+        使用 tokenizer 进行处理, 其中 is_pretokenized=True 
+        在 Dataset 中提前进行分词(比较耗时)
+        这里主要进行 token 转换生成模型需要的特征
+        并对 sentence1/2 所在 batch 分别进行 padding
+
+        :param batch:
+            List[Tuple(Tuple(List[str], List[str]), int)]
+            列表元素为 SiameseDataset.__getitem__() 返回结果
+        :return:
+            Dict[str, Union[torch.Tensor, Any]]
+            包括 input_ids/attention_mask/token_type_ids 等特征
+            为了区别 sentence1/2, 在特征名后面添加 '_1' 和 '_2'
+        """
+        # 分别获得 sentences 和 labels
+        sentences, labels = map(list, zip(*batch))
+        all_sentences = map(list, zip(*sentences))
+
+        features = [
+            self.tokenizer(sents,
+                           return_tensors='pt',
+                           padding=True,
+                           truncation=True,
+                           is_pretokenized=True,
+                           max_length=self.max_length)
+            for sents in all_sentences
+        ]
+        # 组合 sentence1/2 的特征, 作为 SiameseNetwork 的输入
+        features1 = {k + '_1': v for k, v in features[0].items()}
+        features2 = {k + '_2': v for k, v in features[1].items()}
+        feat_dict = {**features1, **features2}
+
+        labels = torch.tensor(labels, dtype=torch.long)
+        feat_dict['labels'] = labels
+        return feat_dict
 
 
 class BertForSiameseNet(BertPreTrainedModel):
@@ -32,16 +145,15 @@ class BertForSiameseNet(BertPreTrainedModel):
         self.init_weights()
 
     def _mean_pooling(self, model_output, attention_mask):
-        '''Mean Pooling - Take attention mask into account for correct averaging
+        """Mean Pooling - Take attention mask into account for correct averaging
         :param model_output: Tuple
         :param attention_mask: Tensor, (batch_size, seq_length)
-        '''
+        """
         # (batch_size, seq_length, hidden_size)
-        token_embeddings = model_output[0].cpu()
-
+        token_embeddings = model_output[0]
         # First element of model_output contains all token embeddings
         # (batch_size, seq_length) => (batch_size, seq_length, hidden_size)
-        input_mask_expanded = attention_mask.cpu().unsqueeze(-1).expand(
+        input_mask_expanded = attention_mask.unsqueeze(-1).expand(
             token_embeddings.size()).float()
 
         # Only sum the non-padding token embeddings
@@ -53,20 +165,26 @@ class BertForSiameseNet(BertPreTrainedModel):
         return sum_embeddings / sum_mask
 
     def forward(self,
-                input_ids=None,
-                attention_mask=None,
-                token_type_ids=None,
+                input_ids_1=None,
+                attention_mask_1=None,
+                token_type_ids_1=None,
+                input_ids_2=None,
+                attention_mask_2=None,
+                token_type_ids_2=None,
                 labels=None):
         # sequence_output, pooled_output, (hidden_states), (attentions)
         outputs = [
-            self.bert(ids, attention_mask=masks,
-                      token_type_ids=types) for ids, masks, types in zip(
-                          input_ids, attention_mask, token_type_ids)
+            self.bert(input_ids_1,
+                      attention_mask=attention_mask_1,
+                      token_type_ids=token_type_ids_1),
+            self.bert(input_ids_2,
+                      attention_mask=attention_mask_2,
+                      token_type_ids=token_type_ids_2),
         ]
-
+        # 使用 mean pooling 获得句向量
         embeddings = [
-            self._mean_pooling(output, mask)
-            for output, mask in zip(outputs, attention_mask)
+            self._mean_pooling(output, mask) for output, mask in zip(
+                outputs, [attention_mask_1, attention_mask_2])
         ]
 
         # 计算两个句向量的余弦相似度
@@ -94,43 +212,11 @@ class BertForSiameseNet(BertPreTrainedModel):
         return outputs  # (loss), logits, (hidden_states), (attentions)
 
 
-class SiameseDataset(Dataset):
-    def __init__(self, dataset, tokenizer, max_length):
-        sentences1, sentences2, labels = dataset
-        features1 = tokenizer(sentences1,
-                              return_tensors='pt',
-                              max_length=max_length,
-                              padding=True,
-                              truncation=True)
-        features2 = tokenizer(sentences2,
-                              return_tensors='pt',
-                              max_length=max_length,
-                              padding=True,
-                              truncation=True)
-        self.examples = [
-            (feat1, feat2, label)
-            for feat1, feat2, label in zip(features1, features2, labels)
-        ]
-
-    def __getitem__(self, item):
-        example = self.examples[item]
-        features = {
-            k: torch.stack([example[0][k], example[1][k]])
-            for k in example[0]
-        }
-        features['label'] = torch.tensor(self.examples[item][2],
-                                         dtype=torch.long)
-        return features
-
-    def __len__(self):
-        return len(self.examples)
-
-
 def compute_metrics(pred):
     def find_best_acc_and_threshold(scores, labels):
-        '''计算最高正确率的余弦距离阈值
-        Ref https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/evaluation/BinaryClassificationEvaluator.py
-        '''
+        """计算最高正确率的余弦距离阈值
+        参考 https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/evaluation/BinaryClassificationEvaluator.py
+        """
         # 按余弦距离从高到低排序
         rows = list(zip(scores, labels))
         rows = sorted(rows, key=lambda x: x[0], reverse=True)
@@ -174,19 +260,22 @@ def compute_metrics(pred):
 
 def load_sents_from_csv(filename):
     data = pd.read_csv(filename)
-    sents1, sents2, labels = [], [], []
+    examples = []
     for _, row in data.iterrows():
-        sents1.append(row['sentence1'])
-        sents2.append(row['sentence2'])
-        labels.append(row['label'])
+        examples.append(
+            InputExample(texts=[row['sentence1'], row['sentence2']],
+                         label=row['label']))
 
-    return (sents1, sents2, labels)
+    print('loading %d examples from %s' % (len(examples), filename))
+    return examples
 
 
 def main(args):
     # 初始化预训练模型和分词器
-    model = BertForSiameseNet.from_pretrained(args.model_name_or_path,
-                                              args=args)
+    model = BertForSiameseNet.from_pretrained(
+        args.model_name_or_path
+        if args.mode == 'train' else args.model_save_path,
+        args=args)
     tokenizer = BertTokenizer.from_pretrained(args.model_name_or_path)
 
     # 配置训练参数
@@ -199,19 +288,21 @@ def main(args):
         weight_decay=args.weight_decay,
         logging_dir=args.logging_dir)
 
+    # 初始化 collator 用于批处理数据
+    collator = Collator(tokenizer, args.max_length)
+
     if args.mode == 'train':
         # 读取训练集和开发集
         print('loading dataset')
         train_dataset = SiameseDataset(load_sents_from_csv(args.trainset_path),
-                                       tokenizer,
-                                       max_length=args.max_length)
+                                       tokenizer)
         dev_dataset = SiameseDataset(load_sents_from_csv(args.devset_path),
-                                     tokenizer,
-                                     max_length=args.max_length)
+                                     tokenizer)
         # 初始化训练器并开始训练
         print('start training')
         trainer = Trainer(model=model,
                           args=training_args,
+                          data_collator=collator.batching_collate,
                           compute_metrics=compute_metrics,
                           train_dataset=train_dataset,
                           eval_dataset=dev_dataset)
@@ -221,20 +312,20 @@ def main(args):
 
     elif args.mode == 'test':
         test_samples = load_sents_from_csv(args.testset_path)
-        test_dataset = SiameseDataset(test_samples,
-                                      tokenizer,
-                                      max_length=args.max_length)
+        test_dataset = SiameseDataset(test_samples, tokenizer)
         dev_dataset = SiameseDataset(load_sents_from_csv(args.devset_path),
-                                     tokenizer,
-                                     max_length=args.max_length)
-        # 初始化训练器并开始训练
+                                     tokenizer)
+        # 初始化训练器
         trainer = Trainer(model=model,
                           args=training_args,
+                          data_collator=collator.batching_collate,
                           compute_metrics=compute_metrics)
         dev_result = trainer.evaluate(eval_dataset=dev_dataset)
-        threshold = dev_result['threshold']
+        pprint.pprint(dev_result)
 
-        labels = test_samples[2]
+        threshold = dev_result['eval_threshold']
+
+        labels = [sample.label for sample in test_samples]
         scores = trainer.predict(test_dataset=test_dataset).predictions
 
         # 计算正确率
