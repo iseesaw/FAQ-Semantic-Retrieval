@@ -6,5 +6,6 @@
 faq/hflqa/
 faq/lcqmc/
 faq/output/
+faq/samples/
 *.DS_Store
 */logs/

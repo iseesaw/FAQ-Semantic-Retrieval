@@ -7,7 +7,11 @@
 import ast
 from argparse import ArgumentParser
 
+import os
+import pprint
+
 import pandas as pd
+from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 import torch
 from transformers import BertForSequenceClassification, BertTokenizerFast, TrainingArguments, Trainer
@@ -51,11 +55,25 @@ def load_dataset(filename):
             df['sentence2'].values.tolist()], df['label'].values.tolist()
 
 
+def compute_metrics(pred):
+    labels = pred.label_ids
+    preds = pred.predictions.argmax(-1)
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        labels, preds, average='binary')
+    acc = accuracy_score(labels, preds)
+    return {
+        'accuracy': acc,
+        'f1': f1,
+        'precision': precision,
+        'recall': recall
+    }
+
+
 def main(args):
+    model_path = args.model_name_or_path if args.do_train else args.output_dir
     # 初始化预训练模型和分词器
-    tokenizer = BertTokenizerFast.from_pretrained(args.model_name_or_path)
-    model = BertForSequenceClassification.from_pretrained(
-        args.model_name_or_path)
+    tokenizer = BertTokenizerFast.from_pretrained(model_path)
+    model = BertForSequenceClassification.from_pretrained(model_path)
 
     # 加载 csv 格式数据集
     train_texts, train_labels = load_dataset(args.trainset_path)
@@ -100,18 +118,22 @@ def main(args):
     # 初始化训练器并开始训练
     trainer = Trainer(model=model,
                       args=training_args,
+                      compute_metrics=compute_metrics,
                       train_dataset=train_dataset,
                       eval_dataset=dev_dataset)
 
     if args.do_train:
         trainer.train()
 
+        # 保存模型和分词器
+        trainer.save_model()
+        tokenizer.save_pretrained(args.output_dir)
+
     if args.do_predict:
-        metrics = trainer.evaluate(test_dataset)
-        print(metrics)
-    # 保存模型和分词器
-    trainer.save_model()
-    tokenizer.save_pretrained(args.output_dir)
+        eval_metrics = trainer.evaluate(dev_dataset)
+        pprint.pprint(eval_metrics)
+        test_metrics = trainer.evaluate(test_dataset)
+        pprint.pprint(test_metrics)
 
 
 if __name__ == '__main__':
