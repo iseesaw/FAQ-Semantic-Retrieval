@@ -44,9 +44,16 @@
 
     | dataset | threshold | accuracy | macro f1 |
     | ------- | --------- | -------- | -------- |
-    | dev     |           |          |          |
-    | test    |           |          |          |
+    | dev     | 0.8451    | 0.8818   | 0.8810   |
+    | test    | -         | 0.8705   | 0.8701   |
 
   - BertForSeqClassification
 
   - `bert-base-chinese`
+  
+    | dataset | threshold | accuracy | macro f1 |
+    | ------- | --------- | -------- | -------- |
+    | dev     |           |          |          |
+    | test    |           |          |          |
+  
+    
