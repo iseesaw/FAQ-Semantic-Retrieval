@@ -28,7 +28,74 @@
 
 ### 关键字检索（倒排索引）
 
-计算候选问题集的 TF-IDF 或者 BM25 得分，构建倒排索引表，可以使用 Python 第三方库进行索引和查询 [ElasticSearch](https://whoosh.readthedocs.io/en/latest/index.html)，[Lucene](https://lucene.apache.org/pylucene/)，[Whoosh](https://whoosh.readthedocs.io/en/latest/index.html)
+计算每个关键字在各文档中的 $TF-IDF$ 以及 $BM25$ 得分，并建立倒排索引表
+
+Python 第三方库 [ElasticSearch](https://whoosh.readthedocs.io/en/latest/index.html)，[Lucene](https://lucene.apache.org/pylucene/)，[Whoosh](https://whoosh.readthedocs.io/en/latest/index.html)
+
+#### TF-IDF
+
+给定文档集合 $\mathcal{D} = \{d_1, d_2, d_3, \cdots, d_n\}$ ，每个文档为 $d_j = \{t_{1}, t_2, \cdots, t_m\}$
+
+- $TF$（Term Frequency）
+
+  - 词频是指一个给定词语在该文档中出现的频率
+
+  - 词频是词数（Term Count）的归一化，防止偏向长文档
+
+  - 对于某一特定文档 $d_j$ 里的词语 $t_i$ ，其在该文档中出现次数为 $n_{i,j}$ ，则有
+    $$
+    TF_{i,j} = \frac{n_{i,j}}{{\sum_k} n_{k,j}}
+    $$
+
+- $IDF$（Inverse Document Frequency）
+
+  - 逆文档频率用于衡量一个词语在所有文档中的重要性
+
+  - 表示越多的文档中出现该词语， 则其重要性越低
+
+  - 词语 $t_i$ 的 $IDF$ 得分如下，其中 $|\{j: t_i \in d_j\}|$ 表示包含词语 $t_i$ 的文档个数
+    $$
+    IDF_{i} = \lg \frac{|D|}{|\{j: t_i \in d_j\}|}
+    $$
+
+- $TF-IDF$
+
+  - 词语 $t_i$ 对于文档 $d_j$ 的重要程度得分为
+
+  $$
+  TF-IDF_{i,j} = TF_{i,j} \times IDF_{i}
+  $$
+  - 特定文档中的高词频，以及该词语在整个文档集合中的低文件频率，可以产生高权重的 TF-IDF 得分
+  - TF-IDF 倾向于过滤常见的词语，保留重要的词语
+  - 计算简单，但是精度不高，且没有体现词语的位置信息
+
+
+
+#### BM25
+
+> [Okapi BM25](https://en.wikipedia.org/wiki/Okapi_BM25)
+
+用于搜索相关性评估，设输入 $Query=\{q_1, q_2, \cdots, q_N\}$ ，$BM25$ 思想为计算 $q_i$ 与每个文档 $d$ 的相关性得分，然后将 $Query$ 中所有 $q$ 相对于 $d$ 的相关性得分加权求和，从而得到 $Query$ 与 $d$ 得相关性得分 $BM25(Query, d)$ 
+$$
+BM25(Query, d) = \sum_{i=1}^N w_i \times R(q_i, d)
+$$
+
+- 其中每个词语的权重 $w_i$ 可以用 $IDF$ 表示（与上述有所不同，进行了平滑等处理）
+
+  $$
+  w_i = IDF(q_i) = \lg \frac{N - n_{q_i} + 0.5}{n_{q_i} + 0.5}
+  $$
+
+- 而词语对于文档的相关性得分 $R(q_i, d)$ 则为
+
+  $$
+  R(q_i, d) = \frac{f(q_i, d) \times (k_1 + 1)}{f(q_i, d) + k_1 \times (1 - b + b \times \frac{dl}{avgdl})}
+  $$
+  
+  - 其中  $f(q_i, d)$ 为 $q_i$ 在文档 $d$ 中的词频
+  - $k_1, b$ 为可调节参数，通常设置 $k_1 \in [1.2, 2.0] , b = 0.75$ ，$b$ 用于调节文本长度对相关性的影响
+  
+  - $dl,avgdl$ 分别问文档 $d$ 的长度和文档集 $D$ 中所有文档的平均长度
 
 
 
@@ -38,11 +105,11 @@
 
 向量表示可以使用如下几种方法
 
-|                                                              | 优点                             | 缺点                               |
-| ------------------------------------------------------------ | -------------------------------- | ---------------------------------- |
-| [bert-as-serivce](https://github.com/hanxiao/bert-as-service) | 高并发                           | 自定义程度低<br />难以扩展其他模型 |
-| [Sentence-Transformers](https://www.sbert.net/index.html)    | 支持多种模型                     |                                    |
-| [transformers](https://github.com/huggingface/transformers/) | 支持多种模型<br />自定义程度最高 |                                    |
+| Python 库                                                    | 特点                                   |
+| ------------------------------------------------------------ | -------------------------------------- |
+| [bert-as-serivce](https://github.com/hanxiao/bert-as-service) | 高并发，自定义程度低，难以扩展其他模型 |
+| [Sentence-Transformers](https://www.sbert.net/index.html)    | 支持多种模型，接口简单易用             |
+| [transformers](https://github.com/huggingface/transformers/) | 支持多种模型，自定义程度高             |
 
 
 
@@ -94,38 +161,42 @@ reply.json()
 
 [Sentence-Transformers](https://www.sbert.net/index.html) 是一个基于 [Transformers](https://huggingface.co/transformers/) 库的句向量表示 Python 框架，内置语义检索以及多种文本（对）相似度损失函数，可以较快的实现模型和语义检索，并提供多种[预训练的模型](https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/)，包括中文在内的多语言模型
 
-```python
-from sentence_transformers import SentenceTransformer, model
+- [内置预训练的模型](https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/)
 
-# 加载内置模型 (https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/)
-model = SentenceTransformer('distilbert-base-nli-stsb-mean-tokens')
+  ```python
+  from sentence_transformers import SentenceTransformer, model
 
-sentences = ['This framework generates embeddings for each input sentence',
-    'Sentences are passed as a list of string.',
-    'The quick brown fox jumps over the lazy dog.']
+  # 加载内置模型 (https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/)
+  model = SentenceTransformer('distilbert-multilingual-nli-stsb-quora-ranking')
 
-# 句子编码
-embeddings = model.encode(sentences)
-```
+  sentences = ['This framework generates embeddings for each input sentence',
+      'Sentences are passed as a list of string.',
+      'The quick brown fox jumps over the lazy dog.']
 
-> 如果需要加载 HuggingFace 的预训练模型，需要指定特定的类，比如使用 `bert-base-chinese` ，[#issue75](https://github.com/UKPLab/sentence-transformers/issues/75#issuecomment-568717443)
->
-> ```python
-> from sentence_transformers import models
-> 
-> model_name = 'bert-base-chinese'
-> 
-> # 使用 BERT 作为 encoder
-> word_embedding_model = models.BERT(model_name)
-> 
-> # 使用 mean pooling 获得句向量表示
-> pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(),
->                                pooling_mode_mean_tokens=True,
->                                pooling_mode_cls_token=False,
->                                pooling_mode_max_tokens=False)
-> 
-> model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
-> ```
+  # 句子编码
+  embeddings = model.encode(sentences)
+  ```
+
+-  [HuggingFace 的预训练模型](https://huggingface.co/models) 
+
+  > 需要指定特定的类，比如使用 `bert-base-chinese` ，[#issue75](https://github.com/UKPLab/sentence-transformers/issues/75#issuecomment-568717443)
+
+  ```python
+  from sentence_transformers import models
+
+  model_name = 'bert-base-chinese'
+
+  # 使用 BERT 作为 encoder
+  word_embedding_model = models.BERT(model_name)
+
+  # 使用 mean pooling 获得句向量表示
+  pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(),
+  pooling_mode_mean_tokens=True,
+  pooling_mode_cls_token=False,
+  pooling_mode_max_tokens=False)
+
+  model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
+  ```
 
 
 
@@ -171,13 +242,67 @@ sentence_embeddings = mean_pooling(model_output, encoded_input['attention_mask']
 
 ## BERT 微调与蒸馏
 
+在使用 transformers 等库获取句向量过程中，我们可以直接使用已有的预训练模型，如 `bert-base-chinese` 等
+
+但是为了在特定领域上获得更好的效果，可能需要在目标数据集上进行微调，同时可以进行模型蒸馏便于部署应用
+
 ### 数据集
 
-[文本相似度数据集](https://github.com/IceFlameWorm/NLP_Datasets)
+语义召回本质上是计算输入 query 和候选集中问题的相似度，可以使用已有或者构造文本相似度数据集
 
-FAQ 数据集
+- 论文/比赛发布的数据集
 
-内部 FAQ 数据集
+相关论文比赛发布的文本相似度数据集可见 [文本相似度数据集](https://github.com/IceFlameWorm/NLP_Datasets) ，大部分为金融等特定领域文本，其中 [LCQMC](http://icrc.hitsz.edu.cn/Article/show/171.html) 提供基于百度知道的约 20w+ 开放域问题数据集，可供模型测试
+
+| data       | total  | positive | negative |
+| ---------- | ------ | -------- | -------- |
+| training   | 238766 | 138574   | 100192   |
+| validation | 8802   | 4402     | 4400     |
+| test       | 12500  | 6250     | 6250     |
+
+除此以外，百度[千言项目](https://www.luge.ai/)发布了[文本相似度评测](https://aistudio.baidu.com/aistudio/competition/detail/45)，包含 LCQMC/BQ Corpus/PAWS-X 等数据集，可供参考
+
+
+
+- 内部数据集
+
+内部给定的 FAQ 数据集形式如下，包括各种”主题/问题“，每种“主题/问题”可以有多种不同表达形式的问题 `post`，同时对应多种形式的回复 `resp` 
+
+检索时只需要将 query 与所有 post 进行相似度计算，从而召回最相似的 post ，然后获取对应的 “主题/问题” 的所有回复 `resp` ，最后随机返回一个回复即可
+
+```python
+{
+   "晚安": {
+       "post": [
+            "10点了，我要睡觉了",
+            "唉，该休息了",
+            "唉不跟你聊了睡觉啦",
+         		...
+        ],
+       "resp": [
+            "祝你做个好梦",
+            "祝你有个好梦，晚安！",
+            "晚安，做个好梦！"
+            ...
+        ]
+     },
+  	"感谢": {
+      	"post": [
+        		"多谢了",
+       		 "非常感谢",
+          ...
+      	],
+      	"resp": [
+        		"助人为乐为快乐之本",
+        		"别客气",
+          	...
+      	]
+    },
+  	...
+}
+```
+
+
 
 ### 负采样
 
@@ -207,7 +332,7 @@ FAQ 数据集
 
 ### 双塔模型
 
-语义召回模块使用**基于交互的双塔模型** （也称为 **Siamese Net** ，孪生网络）
+微调训练时使用**基于交互的双塔模型** （也称为 **Siamese Net** ，孪生网络），与语义召回模块获取句向量的形保持一致，主要包括
 
 - **Encoding**，使用 **BERT** 分别对 query 和 candidate 进行编码
 - **Pooling**，将最后一层的**平均词嵌入作为句子表示**（或者 [CLS] 的向量表示，效果存在差别）
@@ -221,7 +346,7 @@ $$
 
 <img src="https://raw.githubusercontent.com/UKPLab/sentence-transformers/master/docs/img/SBERT_Siamese_Network.png" alt="SBERT Siamese Network Architecture" style="zoom: 50%;" />
 
-> **基于表示的模型**，将 query 和 cand 拼接作为 BERT 的输入，然后取最后一层 [CLS] 字段的向量表示输入全连接层进行分类
+> **基于表示的模型**，即 [BertForSequenceClassification](https://huggingface.co/transformers/model_doc/bert.html#bertforsequenceclassification)，将 query 和 cand 拼接作为 BERT 的输入，然后取最后一层 [CLS] 字段的向量表示输入全连接层进行分类
 > $$
 > BERT_{rel}(q, c) = \vec w \times \vec {qd}_{cls}^{last}
 > $$
@@ -237,7 +362,7 @@ $$
 >
 > 同时结合  [SentenceTransformers](https://www.sbert.net/index.html) 中 [Loss API](https://www.sbert.net/docs/package_reference/losses.html) 总结
 
-排序模型使用的损失函数为 **Ranking loss**，不同于C rossEntropy 和 MSE 进行分类和回归任务，**Ranking loss** 目的是预测输入样本对（即上述双塔模型中 $u$ 和 $v$ 之间）之间的相对距离（**度量学习任务**）
+模型训练使用的损失函数为 **Ranking loss**，不同于CrossEntropy 和 MSE 进行分类和回归任务，**Ranking loss** 目的是预测输入样本对（即上述双塔模型中 $u$ 和 $v$ 之间）之间的相对距离（**度量学习任务**）
 
 
 
@@ -319,18 +444,18 @@ $$
 
 fine-tune 可以使用高度封装的 [Sentence-Transformers](https://www.sbert.net/index.html)  快速搭建模型，或者使用 [Transformers](https://huggingface.co/transformers/) 更灵活地实现自定义模型
 
-| 框架                                                      | 优点                                                         | 缺点               |
-| --------------------------------------------------------- | ------------------------------------------------------------ | ------------------ |
-| [Sentence-Transformers](https://www.sbert.net/index.html) | 简单易用<br />内置多种 Ranking loss<br />插件式模块使用<br />主要用于句对分类任务 | 不支持多GPU训练    |
-| [Transformers](https://huggingface.co/transformers/)      | 内置多种训练机制<br />包括半精度、分布式训练等<br />自定义程度较高，适合各种任务 | Ranking loss自定义 |
+| 框架                                                      | 特点                                                         |
+| --------------------------------------------------------- | ------------------------------------------------------------ |
+| [Sentence-Transformers](https://www.sbert.net/index.html) | 简单易用<br />内置多种 Ranking loss<br />插件式模块使用<br />主要用于句对分类任务<br />不支持多GPU训练 |
+| [Transformers](https://huggingface.co/transformers/)      | 内置多种训练机制<br />包括半精度、分布式训练等<br />自定义程度较高，适合各种任务 |
 
-
+以下分别介绍代码实现步骤
 
 - [Sentence-Transformers](https://www.sbert.net/index.html) 
 
-  - 可以进行多种任务的fine-tune，这里可以选择类似的 [Quora Duplicate Questions](https://www.sbert.net/examples/training/quora_duplicate_questions/README.html) 作为参考，即判断两个问题是否相似，标签为 0 和 1
+  - 可以进行多种任务的 fine-tune，这里可以选择类似的 [Quora Duplicate Questions](https://www.sbert.net/examples/training/quora_duplicate_questions/README.html) 作为参考，即判断两个问题是否相似，标签为 0 和 1
 
-  - 首先需要初始化预训练模型，`model_name` 必须是 Sentece-Transformers [内置的预训练模型](https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/)
+  - 首先需要初始化预训练模型，`model_name` 必须是 Sentece-Transformers [内置的预训练模型](https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/) ，也可以加载 transformers 的模型（与前文一致）
 
     ```python
     from sentence_transformers import SentenceTransformer, models
@@ -402,18 +527,30 @@ fine-tune 可以使用高度封装的 [Sentence-Transformers](https://www.sbert.
 - [Transformers](https://huggingface.co/transformers/)
 
   - 除了使用 [SentenceTransformers](https://www.sbert.net/index.html) ，也可以直接使用 [Transformers](https://huggingface.co/transformers/) 的 [Trainer](https://huggingface.co/transformers/main_classes/trainer.html) 接口进行快速模型训练
-- 读取所有句对保存 List[InputExample]
-  - 初始化 SiameseDataset(examples, tokenizer)
-- 实现 `__getitem__` 方法，返回句对的 id 表示，Tuple(List[int], List[int]), label
-  
-  - 实现 DataLoader 的 collator 方法
-    - 重点是在每个batch内部进行补齐，但需要速度快，那么分词得提前完成
-    - 输入 List[Tuple(List[int], List[int]), label]，输出 {features: [{input: tensor, mask: tensor}, {intput: tensor, mask:tensor}], labels: Tensor()}
-    - features[0]，features[1] 分别进行 padding
-    - tocuda
-  
-  - 调用模型，分别输入 features，{input: tensor, mask: tensor}，获得 batch 的句向量
-  - 然后计算句对的余弦相似度并返回 loss
+  - [Trainer](https://huggingface.co/transformers/main_classes/trainer.html) 基本用法参考 [Training and fine-tuning](https://huggingface.co/transformers/training.html#trainer) ，内部封装 PyTorch 训练/预测基本流程，只需要确定 model 和 Dataset 即可
+  - 为了实现基于 BERT 的 SiameseNetwork，需要自定义 Model 以及 Dataset，具体步骤如下
+    - 读取所有句对样本保存 `List[InputExample]` ，`InputExample` 包含句对信息
+    - 初始化 `SiameseDataset(examples, tokenizer)` ，实现 `__getitem__` 方法（进行分词等操作，返回为 token id 序列）
+    - 实现 `collate_fn` 函数，用于 `DataLoader` 回调，对于每个 batch 的数据进行处理（分别对 batch 内所有 sentence1 和 sentence2 进行补齐， 并准备 `BertForSiameseNetwork` 模型输入的特征）
+    - 实现 `BertForSiameseNetwork` ，继承 `BertPreTrainedModel` ，使用 `BertModel` 作为 encoder；实现 `forward` 函数，自定义输入特征参数，使用 encoder 分别编码获得 sentence1和 sentence2 的句向量，计算余弦相似度作为 loss 返回
+    - 实现 `compute_metrics` ，进行指标计算
+    - 初始化 `Trainer` 实例，传入 model，dataset，collate_fn 以及 compute_metrics
+
+
+
+
+最终在 LCQMC 数据集上的效果
+
+| Lib                                             | pretrained model                                     | accuracy(dev/test) | f1(dev/test)      |
+| ----------------------------------------------- | ---------------------------------------------------- | ------------------ | ----------------- |
+| sentence-transformers                           | distilbert-multilingual<br />-nli-stsb-quora-ranking | 0.8741/0.8745      | 0.8753/0.8744     |
+| sentence-transformers                           | bert-base-chinese                                    | **0.8890/0.8796**  | **0.8898/0.8794** |
+| transformers<br />BertForSiameseNetwork         | bert-base-chinese                                    | 0.8818/0.8705      | 0.8810/0.8701     |
+| transformers<br />BertForSequenceClassification | bert-base-chinese                                    | 0.8832/0.8600      | 0.8848/0.8706     |
+
+> 其中前三个为双塔模型，使用 dev 数据获得最高正确率的余弦距离阈值，然后进行 test 的正确率计算
+>
+> 最后一个为基于交互的模型，将拼接句对作为输入，输出分类标签
 
 
 
@@ -427,14 +564,14 @@ fine-tune 可以使用高度封装的 [Sentence-Transformers](https://www.sbert.
 
 ### Flask 搭建WebAPI
 
-- Flask + Gunicorn + gevent + nginx ，进程管理（自启动）（uwsgi同理，前者更简单）
--  [werkzeug.contrib.cache](https://werkzeug.palletsprojects.com/en/0.16.x/contrib/cache/)  使用 cache 缓存， 注意版本 werkzeug==0.16.0
+- Flask + Gunicorn + gevent + nginx ，进程管理（自启动）（uwsgi 同理，gunicorn 更简单）
+-  [werkzeug.contrib.cache](https://werkzeug.palletsprojects.com/en/0.16.x/contrib/cache/)  使用 cache 缓存问题， 注意版本 werkzeug==0.16.0
 
 
 
 ### Locust 压力测试
 
-
+使用 [Locust](https://locust.io/) 编写压力测试脚本
 
 
 
