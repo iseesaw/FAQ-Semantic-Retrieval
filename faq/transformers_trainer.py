@@ -276,14 +276,14 @@ def load_sents_from_csv(filename):
 
 def main(args):
     # 初始化预训练模型和分词器
-    model_path = args.model_name_or_path if args.mode == 'train' else args.model_save_path
+    model_path = args.model_name_or_path if args.do_train else args.output_dir
     model = BertForSiameseNet.from_pretrained(model_path, args=args)
     tokenizer = BertTokenizer.from_pretrained(model_path)
 
     # 配置训练参数, 更多配置参考文档
     # https://huggingface.co/transformers/main_classes/trainer.html#trainingarguments
     training_args = TrainingArguments(
-        output_dir=args.model_save_path,
+        output_dir=args.output_dir,
         do_train=args.do_train,
         do_eval=args.do_eval,
         num_train_epochs=args.num_train_epochs,
@@ -292,8 +292,8 @@ def main(args):
         warmup_steps=args.warmup_steps,
         weight_decay=args.weight_decay,
         logging_dir=args.logging_dir,
-        save_steps=1000,
-        save_total_limit=5)
+        save_steps=args.save_steps,
+        save_total_limit=args.save_total_limit)
 
     # 初始化 collator 用于批处理数据
     collator = Collator(tokenizer, args.max_length)
@@ -317,9 +317,9 @@ def main(args):
         trainer.train()
 
         # 保存模型和词表
-        logger.info('Save model and tokenizer to %s' % args.model_save_path)
+        logger.info('Save model and tokenizer to %s' % args.output_dir)
         trainer.save_model()
-        tokenizer.save_pretrained(args.model_save_path)
+        tokenizer.save_pretrained(args.output_dir)
 
     elif args.do_predict:
         logger.info('*** TEST **')
@@ -380,12 +380,14 @@ if __name__ == '__main__':
     parser.add_argument('--per_device_eval_batch_size', type=int, default=128)
     parser.add_argument('--warmup_steps', type=int, default=500)
     parser.add_argument('--weight_decay', type=float, default=0.01)
+    parser.add_argument('--save_steps', type=int, default=1000)
+    parser.add_argument('--save_total_limit', type=int, default=3)
     parser.add_argument(
         '--margin',
         type=float,
         default=0.5,
         help='Negative pairs should have a distance of at least 0.5')
-    parser.add_argument('--model_save_path',
+    parser.add_argument('--output_dir',
                         default='./output/transformers-bert-base-chinese')
     parser.add_argument('--logging_dir', type=str, default='./logs')
 
