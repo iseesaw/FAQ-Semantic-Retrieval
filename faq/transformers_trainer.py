@@ -4,12 +4,11 @@
 # @Author  : Kaiyan Zhang (minekaiyan@gmail.com)
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
-import os
+import ast
+import logging
 import pprint
 import argparse
 import pandas as pd
-from tokenizers.pre_tokenizers import PreTokenizer
-from tqdm import tqdm
 from typing import Union, List
 
 import torch
@@ -20,32 +19,30 @@ from transformers import BertPreTrainedModel, BertModel, PreTrainedTokenizer, Be
 
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 """
-基于 Transformers Trainer 的 SiameseNetwork
+基于 BERT 的 SiameseNetwork, 并使用 Transformers Trainer 进行模型训练
 """
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
+    datefmt="%m/%d/%Y %H:%M:%S",
+    level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class InputExample:
-    """
-    Structure for one input example with texts, the label and a unique id
-    """
     def __init__(self,
                  guid: str = '',
                  texts: List[str] = None,
                  texts_tokenized: List[List[int]] = None,
                  label: Union[int, float] = None):
         """
-        Creates one InputExample with the given texts, guid and label
-
-        str.strip() is called on both texts.
-
         :param guid
-            id for the example
+            样本唯一标识ID
         :param texts
-            the texts for the example
+            句对文本
         :param texts_tokenized
-            Optional: Texts that are already tokenized. If texts_tokenized is passed, texts must not be passed.
+            [可选] 是否已经分词
         :param label
-            the label for the example
+            样本标签
         """
         self.guid = guid
         self.texts = [text.strip()
@@ -62,12 +59,12 @@ class SiameseDataset(Dataset):
     def __init__(self, examples: List[InputExample],
                  tokenizer: PreTrainedTokenizer):
         """
-        Create a new SentencesDataset with the tokenized texts and the labels as Tensor
+        构建 siamese 数据集, 主要为分词后的句对以及标签
 
         :param examples
-            A list of sentence.transformers.readers.InputExample
-        :param model
-            SentenceTransformerModel
+            List[InputExample]
+        :param tokenizer
+            PreTrainedTokenizer
         """
         self.tokenizer = tokenizer
         self.examples = examples
@@ -151,16 +148,16 @@ class BertForSiameseNet(BertPreTrainedModel):
         """
         # (batch_size, seq_length, hidden_size)
         token_embeddings = model_output[0]
-        # First element of model_output contains all token embeddings
+
         # (batch_size, seq_length) => (batch_size, seq_length, hidden_size)
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(
             token_embeddings.size()).float()
 
-        # Only sum the non-padding token embeddings
+        # 只将原始未补齐部分的词嵌入进行相加
         # (batch_size, seq_length, hidden_size) => (batch_size, hidden_size)
         sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
 
-        # smoothing, avoid being divided by zero
+        # 1e-9 用于平滑, 避免除零操作
         sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
         return sum_embeddings / sum_mask
 
@@ -197,7 +194,7 @@ class BertForSiameseNet(BertPreTrainedModel):
             negs = distance_matrix[labels == 0]
             poss = distance_matrix[labels == 1]
 
-            # select hard positive and hard negative pairs
+            # 选择最难识别的正负样本
             negative_pairs = negs[negs < (
                 poss.max() if len(poss) > 1 else negs.mean())]
             positive_pairs = poss[poss > (
@@ -242,9 +239,14 @@ def compute_metrics(pred):
 
         return max_acc, best_threshold
 
+    # 真实和预测标签
     labels = pred.label_ids
     scores = pred.predictions
+
+    # 计算最佳正确率时的距离阈值
     max_acc, best_threshold = find_best_acc_and_threshold(scores, labels)
+
+    # 计算此时的精确率/召回率和F1值
     preds = [1 if p > best_threshold else 0 for p in scores]
     precision, recall, f1, _ = precision_recall_fscore_support(
         labels, preds, average='binary')
@@ -259,6 +261,8 @@ def compute_metrics(pred):
 
 
 def load_sents_from_csv(filename):
+    """加载数据集并保存为 InputExample
+    """
     data = pd.read_csv(filename)
     examples = []
     for _, row in data.iterrows():
@@ -266,40 +270,44 @@ def load_sents_from_csv(filename):
             InputExample(texts=[row['sentence1'], row['sentence2']],
                          label=row['label']))
 
-    print('loading %d examples from %s' % (len(examples), filename))
+    logger.info('Loading %d examples from %s' % (len(examples), filename))
     return examples
 
 
 def main(args):
     # 初始化预训练模型和分词器
-    model = BertForSiameseNet.from_pretrained(
-        args.model_name_or_path
-        if args.mode == 'train' else args.model_save_path,
-        args=args)
-    tokenizer = BertTokenizer.from_pretrained(args.model_name_or_path)
+    model_path = args.model_name_or_path if args.mode == 'train' else args.model_save_path
+    model = BertForSiameseNet.from_pretrained(model_path, args=args)
+    tokenizer = BertTokenizer.from_pretrained(model_path)
 
-    # 配置训练参数
+    # 配置训练参数, 更多配置参考文档
+    # https://huggingface.co/transformers/main_classes/trainer.html#trainingarguments
     training_args = TrainingArguments(
         output_dir=args.model_save_path,
+        do_train=args.do_train,
+        do_eval=args.do_eval,
         num_train_epochs=args.num_train_epochs,
         per_device_train_batch_size=args.per_device_train_batch_size,
         per_device_eval_batch_size=args.per_device_eval_batch_size,
         warmup_steps=args.warmup_steps,
         weight_decay=args.weight_decay,
-        logging_dir=args.logging_dir)
+        logging_dir=args.logging_dir,
+        save_steps=1000,
+        save_total_limit=5)
 
     # 初始化 collator 用于批处理数据
     collator = Collator(tokenizer, args.max_length)
 
-    if args.mode == 'train':
+    if args.do_train:
+        logger.info('*** TRAIN ***')
         # 读取训练集和开发集
-        print('loading dataset')
+        logger.info('Loading train/dev dataset')
         train_dataset = SiameseDataset(load_sents_from_csv(args.trainset_path),
                                        tokenizer)
         dev_dataset = SiameseDataset(load_sents_from_csv(args.devset_path),
                                      tokenizer)
         # 初始化训练器并开始训练
-        print('start training')
+        logger.info('Start training')
         trainer = Trainer(model=model,
                           args=training_args,
                           data_collator=collator.batching_collate,
@@ -308,9 +316,14 @@ def main(args):
                           eval_dataset=dev_dataset)
         trainer.train()
 
+        # 保存模型和词表
+        logger.info('Save model and tokenizer to %s' % args.model_save_path)
         trainer.save_model()
+        tokenizer.save_pretrained(args.model_save_path)
 
-    elif args.mode == 'test':
+    elif args.do_predict:
+        logger.info('*** TEST **')
+        # 加载开发集和测试集
         test_samples = load_sents_from_csv(args.testset_path)
         test_dataset = SiameseDataset(test_samples, tokenizer)
         dev_dataset = SiameseDataset(load_sents_from_csv(args.devset_path),
@@ -320,29 +333,34 @@ def main(args):
                           args=training_args,
                           data_collator=collator.batching_collate,
                           compute_metrics=compute_metrics)
+
+        # 获得开发集结果（计算阈值）
         dev_result = trainer.evaluate(eval_dataset=dev_dataset)
-        pprint.pprint(dev_result)
-
         threshold = dev_result['eval_threshold']
+        logger.info('Dev results {}'.format(dev_result))
 
+        # 计算测试集结果及正确率（使用开发集阈值）
         labels = [sample.label for sample in test_samples]
         scores = trainer.predict(test_dataset=test_dataset).predictions
 
-        # 计算正确率
         preds = [1 if s > threshold else 0 for s in scores]
         acc = accuracy_score(labels, preds)
         p_r_f1 = precision_recall_fscore_support(labels,
                                                  preds,
                                                  average='macro')
-        print('accuracy', acc)
-        print('macro_precision', p_r_f1[0])
-        print('macro_recall', p_r_f1[1])
-        print('macro_f1', p_r_f1[2])
+        test_result = {
+            'accuracy': acc,
+            'macro_precision': p_r_f1[0],
+            'macro_recall': p_r_f1[1],
+            'macro_f1': p_r_f1[2]
+        }
+        logger.info('Test results {}'.format(test_result))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Bert For Siamese Network')
-    parser.add_argument('--mode', type=str, default='train')
+    parser.add_argument('--do_train', type=ast.literal_eval, default=False)
+    parser.add_argument('--do_predict', type=ast.literal_eval, default=False)
     parser.add_argument('--trainset_path',
                         type=str,
                         default='lcqmc/LCQMC_train.csv')
