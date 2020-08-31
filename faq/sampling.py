@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 
 from sklearn.cluster import KMeans
+from sklearn.model_selection import train_test_split
 
 from sentence_transformers import models, SentenceTransformer
 """
@@ -45,7 +46,7 @@ FAQ 的过程为
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
-    datefmt="%m/%d/%Y %H:%M:%S",
+    datefmt="%Y/%m/%d %H:%M:%S",
     level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -94,12 +95,12 @@ def negative_sampling(vectors,
         List[Tuple(str, str)]
         保存负采样结果, 每个元组表示原始标签以及负采样结果（可能保存多个）
     """
-
+    assert len(vectors) == len(sentences) == len(labels)
     # ref https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html
     kmeans = KMeans(n_clusters=n_clusters,
                     random_state=128,
                     init='k-means++',
-                    n_init=10,
+                    n_init=3,
                     verbose=True)
     kmeans.fit(vectors)
 
@@ -124,7 +125,7 @@ def negative_sampling(vectors,
 
         # 全局负采样
         cand_labels = list(range(n_clusters))
-        cand_labels.remove(label)
+        cand_labels.remove(pred)
         for cand_label in random.sample(cand_labels, k=global_num_negs):
             cands = [
                 i for i in pred2sents.get(cand_label) if labels[i] != label
@@ -183,7 +184,7 @@ def encode(sentences, model_name_or_path, is_transformers):
     else:
         model = SentenceTransformer(model_name_or_path)
 
-    vectors = model.encode(sentences, show_progress_bar=True)
+    vectors = model.encode(sentences, show_progress_bar=True, device='cuda')
 
     return vectors
 
@@ -200,14 +201,20 @@ def load_data(filename):
 
 def main(args):
     if not os.path.exists(args.output_dir):
+        logger.info('make directory %s' % args.output_dir)
         os.makedirs(args.output_dir)
 
+    logger.info('loading data from %s' % args.filename)
     data = load_data(args.filename)
 
     # positive sampling
+    logger.info('** positive sampling **')
+    logger.info('num_pos = %d' % args.num_pos)
     pos_pairs = positive_sampling(data, num_pos=args.num_pos)
+    logger.info('sampling %d positive samples' % len(pos_pairs))
 
     # prepare for negative sampling
+    logger.info('** negative sampling **')
     sents, labels = [], []
     cnt = 0
     for _, post_resp in data.items():
@@ -215,20 +222,27 @@ def main(args):
         labels.extend([cnt] * len(post_resp.get('post')))
         cnt += 1
 
+    logger.info('loading checkpoint from %s' % args.model_name_or_path)
+    logger.info('encoding %d sentences' % len(sents))
     vectors = encode(sents,
                      model_name_or_path=args.model_name_or_path,
                      is_transformers=args.is_transformers)
     n_clusters = args.n_clusters if args.n_clusters != -1 else len(
         data) // args.hyper_beta
+
+    logger.info('n_cluster = %d, local_num_negs = %d, global_num_negs = %d' %
+                (n_clusters, args.local_num_negs, args.global_num_negs))
     preds, neg_pairs = negative_sampling(vectors,
                                          sentences=sents,
                                          labels=labels,
                                          n_clusters=n_clusters,
                                          local_num_negs=args.local_num_negs,
                                          global_num_negs=args.global_num_negs)
+    logger.info('sampling %d negative samples' % len(neg_pairs))
 
     # visualize
     if args.visualized:
+        logger.info('** visualize **')
         visualize(vectors,
                   labels=labels,
                   preds=preds,
@@ -237,11 +251,24 @@ def main(args):
     # merge & shuffle
     all_pairs = pos_pairs + neg_pairs
     random.shuffle(all_pairs)
+    logger.info(
+        'we get total %d samples, where %d positive samples and %d negative samples'
+        % (len(all_pairs), len(pos_pairs), len(neg_pairs)))
 
-    # save
+    # split & save
+    out_file = f'cluster{n_clusters}_p{args.num_pos}_ln{args.local_num_negs}_gn{args.global_num_negs}.csv'
     df = pd.DataFrame(data=all_pairs,
                       columns=['sentence1', 'sentence2', 'label'])
-    df.to_csv(os.path.join(args.output_dir, 'data.csv'), index=None)
+
+    logger.info('train/test set split with test_size = %f' % args.test_size)
+    trainset, testset = train_test_split(df, test_size=args.test_size)
+
+    logger.info('save all samples to all/train/test_%s' % out_file)
+    df.to_csv(os.path.join(args.output_dir, 'all_' + out_file), index=None)
+    trainset.to_csv(os.path.join(args.output_dir, 'train_' + out_file),
+                    index=None)
+    testset.to_csv(os.path.join(args.output_dir, 'test_' + out_file),
+                   index=None)
 
 
 if __name__ == '__main__':
@@ -249,7 +276,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--filename', default='hflqa/faq.json')
     parser.add_argument(
-        '--pretrained_model_path',
+        '--model_name_or_path',
         default=
         './output/training-OnlineConstrativeLoss-LCQMC-bert-base-chinese',
         help='path of pretrained model which is used to get sentence vector')
@@ -267,15 +294,18 @@ if __name__ == '__main__':
         type=int,
         default=-1,
         help='if n_clusters=-1, then n_cluster=n_topics/hyper_m')
-    parser.add_argument('num_pos', type=int, default=4)
-    parser.add_argument('local_num_negs', type=int, default=2)
-    parser.add_argument('global_num_negs', type=int, default=2)
+    parser.add_argument('--num_pos', type=int, default=4)
+    parser.add_argument('--local_num_negs', type=int, default=2)
+    parser.add_argument('--global_num_negs', type=int, default=2)
 
     parser.add_argument('--visualized',
                         type=ast.literal_eval,
-                        default=True,
+                        default=False,
                         help='whether to visualize cluster results or not')
-
+    parser.add_argument('--test_size',
+                        type=float,
+                        default=0.1,
+                        help='train/test split size')
     parser.add_argument('--output_dir', type=str, default='./samples')
 
     args = parser.parse_args()

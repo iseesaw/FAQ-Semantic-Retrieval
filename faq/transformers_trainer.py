@@ -23,7 +23,7 @@ from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 """
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
-    datefmt="%m/%d/%Y %H:%M:%S",
+    datefmt="%Y/%m/%d %H:%M:%S",
     level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -128,6 +128,7 @@ class Collator:
 
         labels = torch.tensor(labels, dtype=torch.long)
         feat_dict['labels'] = labels
+
         return feat_dict
 
 
@@ -136,6 +137,7 @@ class BertForSiameseNet(BertPreTrainedModel):
         super().__init__(config)
 
         self.margin = args.margin
+        self.output_hidden_states = args.output_hidden_states
 
         self.bert = BertModel(config)
 
@@ -146,8 +148,10 @@ class BertForSiameseNet(BertPreTrainedModel):
         :param model_output: Tuple
         :param attention_mask: Tensor, (batch_size, seq_length)
         """
+        # embedding_output + attention_hidden_states x 12
+        #hidden_states = model_output[2]
         # (batch_size, seq_length, hidden_size)
-        token_embeddings = model_output[0]
+        token_embeddings = model_output[0]  #hidden_states[3]
 
         # (batch_size, seq_length) => (batch_size, seq_length, hidden_size)
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(
@@ -170,14 +174,14 @@ class BertForSiameseNet(BertPreTrainedModel):
                 token_type_ids_2=None,
                 labels=None):
         # sequence_output, pooled_output, (hidden_states), (attentions)
-        outputs = [
-            self.bert(input_ids_1,
-                      attention_mask=attention_mask_1,
-                      token_type_ids=token_type_ids_1),
-            self.bert(input_ids_2,
-                      attention_mask=attention_mask_2,
-                      token_type_ids=token_type_ids_2),
-        ]
+        output1 = self.bert(input_ids_1,
+                            attention_mask=attention_mask_1,
+                            token_type_ids=token_type_ids_1,
+                            output_hidden_states=self.output_hidden_states)
+        output2 = self.bert(input_ids_2,
+                            attention_mask=attention_mask_2,
+                            token_type_ids=token_type_ids_2)
+        outputs = [output1, output2]
         # 使用 mean pooling 获得句向量
         embeddings = [
             self._mean_pooling(output, mask) for output, mask in zip(
@@ -186,7 +190,10 @@ class BertForSiameseNet(BertPreTrainedModel):
 
         # 计算两个句向量的余弦相似度
         logits = F.cosine_similarity(embeddings[0], embeddings[1])
-        outputs = (logits, )
+        outputs = (
+            logits,
+            output1[2],
+        )
 
         # 计算 onlineContrastiveLoss
         if labels is not None:
@@ -360,7 +367,8 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Bert For Siamese Network')
     parser.add_argument('--do_train', type=ast.literal_eval, default=False)
-    parser.add_argument('--do_predict', type=ast.literal_eval, default=False)
+    parser.add_argument('--do_eval', type=ast.literal_eval, default=True)
+    parser.add_argument('--do_predict', type=ast.literal_eval, default=True)
     parser.add_argument('--trainset_path',
                         type=str,
                         default='lcqmc/LCQMC_train.csv')
