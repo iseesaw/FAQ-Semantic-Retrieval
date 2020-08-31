@@ -569,22 +569,38 @@ fine-tune 可以使用高度封装的 [Sentence-Transformers](https://www.sbert.
 
 ### 实验结果
 
-| model/pretrained<br />dataset/layers                         | lcqmc<br />acc(dev/test) | customized<br />acc(dev/test) | lcqmc<br />f1(dev/test) | customized<br />f1(dev/test) |
-| ------------------------------------------------------------ | ------------------------ | :---------------------------- | ----------------------- | ---------------------------- |
-| sentence-transformers<br />(distilbert-multilingual<br />-nli-stsb-quora-ranking)<br /> :steam_locomotive: lcqmc dataset | 0.8741/0.8745            |                               | 0.8753/0.8744           |                              |
-| **sentence-transformers<br />(bert-base-chinese)**<br />:steam_locomotive: ​lcqmc dataset | **0.8890/0.8796**        | 0.6650                        | **0.8898/0.8794**       | 0.6297                       |
-| *model from above* :point_up_2: <br />:steam_locomotive: ​customized dataset |                          |                               |                         |                              |
-| *model from above* :point_up_2:<br />:steam_locomotive: lcqmc + customized dataset |                          |                               |                         |                              |
-| 🤗 transformers<br />BertForSiameseNetwork<br />(bert-base-chinese)<br />:steam_locomotive: ​lcqmc dataset | 0.8818/0.8705            |                               | 0.8810/0.8701           |                              |
-| *3 layers from above* :point_up_2:                           | 0.6791/0.7417            |                               | 0.6584/0.7403           |                              |
-| 🤗 transformers<br />BertForSequenceClassification<br /> (bert-base-chinese)<br />:steam_locomotive: ​lcqmc dataset | 0.8832/0.8600            |                               | 0.8848/0.8706           |                              |
-| 🤗 transformers + textbrewer<br />BertForSiameseNetwork<br />distillation-L3<br />:steam_locomotive: ​lcqmc dataset |                          |                               |                         |                              |
-| *bert-base-chinese*                                          |                          |                               |                         |                              |
-| *3 layers from above* :point_up_2:                           |                          |                               |                         |                              |
-| *6 layers from above* :point_up_2:                           |                          |                               |                         |                              |
-| *3 layers from above* :point_up_2:<br />:steam_locomotive: ​lcqmc dataset |                          |                               |                         |                              |
+- [ ] 基于 bert-base-chinese 跑 hflqa(samples/train/test.csv) 数据，:running:
+- [ ] 基于 bert-base-chinese 跑 hflqa+lcqmc (samples/merge_train/test.csv) 数据，:running:
+- [ ] 蒸馏上述模型到 6层 bert，+ ddqa.csv
+- [ ] 直接使用 6层 bert + 上述数据
 
-> lcqmc threshold 0.84, customized threshold 0.77
+- [ ] 
+- [ ] 获得通用领域 6-layers BERT 句向量编码器
+
+| model/pretrained<br/>dataset/layers                          | lcqmc<br/>acc     | lcqmc<br/>f1      | hflqa<br/>acc | hflqa<br/>f1 | hflqa<br/>hit@1           |
+| ------------------------------------------------------------ | ----------------- | ----------------- | :------------ | ------------ | ------------------------- |
+| *bert-base-chinese*                                          | -                 | -                 | -             | -            | 0.7394                    |
+| *6 layers from above* :point_up_2:                           | -                 | -                 | -             | -            | 0.7276                    |
+| *6 layers from above* :point_up_2:<br/>:steam_locomotive: ​merge dataset |                   |                   |               |              | :running_man:             |
+| **sentence-transformers<br/>(bert-base-chinese)**<br/>:steam_locomotive: ​lcqmc dataset | **0.8890/0.8796** | **0.8898/0.8794** |               |              | 0.8350                    |
+| *model from above* :point_up_2: <br/>:steam_locomotive: ​hflqa dataset |                   |                   |               |              | :running:<br />customized |
+| 🤗 transformers<br />BertForSiameseNet<br/>(bert-base-chinese)<br/>:steam_locomotive: ​lcqmc dataset | 0.8818/0.8705     | 0.8810/0.8701     | 0.7333        | 0.5212       |                           |
+| *model from above* :point_up_2: <br />:steam_locomotive: merge dataset |                   |                   |               |              | :running:                 |
+| *6 layers from above* :point_up_2:                           | 0.6791/0.7417     | 0.6584/0.7403     |               |              |                           |
+| 🤗 transformers<br/>BertForSeqClassify<br/> (bert-base-chinese)<br/>:steam_locomotive: ​lcqmc dataset | 0.8832/0.8600     | 0.8848/0.8706     | -             | -            | -                         |
+| 🤗 transformers + textbrewer<br/>BertForSiameseNet<br/>distillation-L6<br/>:steam_locomotive: ​merge dataset + ddqa |                   |                   |               |              |                           |
+| universal model                                              |                   |                   |               |              |                           |
+
+> 内部 hflqa 数据集（posts）按9:1拆分，acc 和 f1 为问题对形式测试集（根据阈值分类），hit@1 为检索测试集（真实场景）
+>
+> | dataset | topics | posts | positive(sampling) | negative(sampling) | total(sampling) |
+> | ------- | ------ | ----- | ------------------ | ------------------ | --------------- |
+> | train   | 1468   | 18267 | 59069              | 67227              | 126296          |
+> | test    | 768    | 2030  | 2984               | 7148               | 10132           |
+> | total   | 1500   | 20297 | -                  | -                  | -               |
+> | ddqa    | -      | -     | 419363             | 456992             | 876355          |
+
+
 
 
 
