@@ -28,6 +28,7 @@
 | [brightmart/roberta_zh](https://github.com/brightmart/roberta_zh) | 中文预训练 RoBERTa 模型 |
 | [Morizeyao/GPT2-Chinese](https://github.com/Morizeyao/GPT2-Chinese) | 中文 GPT-2 模型 |
 | [BrikerMan/Kashgari/](https://github.com/BrikerMan/Kashgari/) | 文本分类和序列标注NLP框架 |
+| [huawei-noah/Pretrained-Language-Model](https://github.com/huawei-noah/Pretrained-Language-Model) | 华为诺亚方舟预训练模型（NEZHA & TinyBERT） |
 |                                                              |  |
 | | |
 | [ChineseGLUE/ChineseGLUE](https://github.com/ChineseGLUE/ChineseGLUE) | 中文任务基准测评 |
