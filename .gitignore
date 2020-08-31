@@ -4,6 +4,7 @@
 *.pyc
 *.csv
 faq/hflqa/
+faq/ddqa/
 faq/lcqmc/
 faq/output/
 faq/samples/
@@ -11,3 +12,4 @@ faq/distills/outputs/
 *.DS_Store
 */logs/
 */__pycache__/
+

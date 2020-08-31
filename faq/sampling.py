@@ -100,7 +100,7 @@ def negative_sampling(vectors,
     kmeans = KMeans(n_clusters=n_clusters,
                     random_state=128,
                     init='k-means++',
-                    n_init=3,
+                    n_init=1,
                     verbose=True)
     kmeans.fit(vectors)
 
@@ -256,25 +256,30 @@ def main(args):
         % (len(all_pairs), len(pos_pairs), len(neg_pairs)))
 
     # split & save
-    out_file = f'cluster{n_clusters}_p{args.num_pos}_ln{args.local_num_negs}_gn{args.global_num_negs}.csv'
+    out_file = 'ddqa.csv'
     df = pd.DataFrame(data=all_pairs,
                       columns=['sentence1', 'sentence2', 'label'])
 
-    logger.info('train/test set split with test_size = %f' % args.test_size)
-    trainset, testset = train_test_split(df, test_size=args.test_size)
+    if args.is_split:
+        logger.info('train/test set split with test_size = %f' %
+                    args.test_size)
+        trainset, testset = train_test_split(df, test_size=args.test_size)
 
-    logger.info('save all samples to all/train/test_%s' % out_file)
-    df.to_csv(os.path.join(args.output_dir, 'all_' + out_file), index=None)
-    trainset.to_csv(os.path.join(args.output_dir, 'train_' + out_file),
-                    index=None)
-    testset.to_csv(os.path.join(args.output_dir, 'test_' + out_file),
-                   index=None)
+        logger.info('save samples to all/train/test_%s' % out_file)
+        df.to_csv(os.path.join(args.output_dir, 'all_' + out_file), index=None)
+        trainset.to_csv(os.path.join(args.output_dir, 'train_' + out_file),
+                        index=None)
+        testset.to_csv(os.path.join(args.output_dir, 'test_' + out_file),
+                       index=None)
+    else:
+        logger.info('save all samples to %s' % out_file)
+        df.to_csv(os.path.join(args.output_dir, out_file), index=None)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Negative Sampling Via Clustering')
 
-    parser.add_argument('--filename', default='hflqa/faq.json')
+    parser.add_argument('--filename', default='ddqa/faq.json')
     parser.add_argument(
         '--model_name_or_path',
         default=
@@ -287,7 +292,7 @@ if __name__ == '__main__':
         help='transformers model or sentence-transformers model')
     parser.add_argument('--hyper_beta',
                         type=int,
-                        default=2,
+                        default=8,
                         help='hyperparameter')
     parser.add_argument(
         '--n_clusters',
@@ -302,6 +307,7 @@ if __name__ == '__main__':
                         type=ast.literal_eval,
                         default=False,
                         help='whether to visualize cluster results or not')
+    parser.add_argument('--is_split', type=ast.literal_eval, default=False)
     parser.add_argument('--test_size',
                         type=float,
                         default=0.1,

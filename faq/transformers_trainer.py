@@ -15,7 +15,9 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 
-from transformers import BertPreTrainedModel, BertModel, PreTrainedTokenizer, BertTokenizer, Trainer, TrainingArguments
+from transformers import BertConfig
+from transformers import BertPreTrainedModel, BertModel, PreTrainedTokenizer, BertTokenizer
+from transformers import Trainer, TrainingArguments
 
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 """
@@ -193,7 +195,7 @@ class BertForSiameseNet(BertPreTrainedModel):
         outputs = (
             logits,
             output1[2],
-        )
+        ) if self.output_hidden_states else (logits, )
 
         # 计算 onlineContrastiveLoss
         if labels is not None:
@@ -257,7 +259,6 @@ def compute_metrics(pred):
     preds = [1 if p > best_threshold else 0 for p in scores]
     precision, recall, f1, _ = precision_recall_fscore_support(
         labels, preds, average='binary')
-
     return {
         'threshold': best_threshold,
         'accuracy': max_acc,
@@ -284,6 +285,11 @@ def load_sents_from_csv(filename):
 def main(args):
     # 初始化预训练模型和分词器
     model_path = args.model_name_or_path if args.do_train else args.output_dir
+    # import os
+    # config = BertConfig.from_json_file('./distills/bert_config_L3.json')
+    # model = BertForSiameseNet(config, args=args)
+    # checkpoint = torch.load(os.path.join(model_path, 'pytorch_model.bin'))
+    # model.load_state_dict(checkpoint, strict=False)
     model = BertForSiameseNet.from_pretrained(model_path, args=args)
     tokenizer = BertTokenizer.from_pretrained(model_path)
 
@@ -344,7 +350,6 @@ def main(args):
         # 获得开发集结果（计算阈值）
         dev_result = trainer.evaluate(eval_dataset=dev_dataset)
         threshold = dev_result['eval_threshold']
-        logger.info('Dev results {}'.format(dev_result))
 
         # 计算测试集结果及正确率（使用开发集阈值）
         labels = [sample.label for sample in test_samples]
@@ -384,8 +389,8 @@ if __name__ == '__main__':
         default='/users6/kyzhang/embeddings/bert/bert-base-chinese')
     parser.add_argument('--max_length', type=int, default=128)
     parser.add_argument('--num_train_epochs', type=int, default=10)
-    parser.add_argument('--per_device_train_batch_size', type=int, default=64)
-    parser.add_argument('--per_device_eval_batch_size', type=int, default=128)
+    parser.add_argument('--per_device_train_batch_size', type=int, default=256)
+    parser.add_argument('--per_device_eval_batch_size', type=int, default=256)
     parser.add_argument('--warmup_steps', type=int, default=500)
     parser.add_argument('--weight_decay', type=float, default=0.01)
     parser.add_argument('--save_steps', type=int, default=1000)
@@ -395,8 +400,11 @@ if __name__ == '__main__':
         type=float,
         default=0.5,
         help='Negative pairs should have a distance of at least 0.5')
+    parser.add_argument('--output_hidden_states',
+                        type=ast.literal_eval,
+                        default=False)
     parser.add_argument('--output_dir',
-                        default='./output/transformers-bert-base-chinese')
+                        default='./output/transformers-bert-L3')
     parser.add_argument('--logging_dir', type=str, default='./logs')
 
     args = parser.parse_args()

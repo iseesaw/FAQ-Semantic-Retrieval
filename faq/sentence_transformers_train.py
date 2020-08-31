@@ -147,16 +147,16 @@ if __name__ == '__main__':
     )
     parser.add_argument('--trainset_path',
                         type=str,
-                        default='samples/train_cluster750_p4_ln2_gn2.csv')
+                        default='samples/train.csv')
     parser.add_argument('--devset_path',
                         type=str,
-                        default='samples/test_cluster750_p4_ln2_gn2.csv')
+                        default='samples/test.csv')
     parser.add_argument('--testset_path',
                         type=str,
-                        default='samples/test_cluster750_p4_ln2_gn2.csv')
+                        default='samples/test.csv')
 
     parser.add_argument('--num_epochs', type=int, default=10)
-    parser.add_argument('--train_batch_size', type=int, default=64)
+    parser.add_argument('--train_batch_size', type=int, default=128)
     parser.add_argument('--eval_batch_size', type=int, default=128)
 
     parser.add_argument('--warmup_steps', type=int, default=1000)
