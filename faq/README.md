@@ -541,22 +541,59 @@ fine-tune 可以使用高度封装的 [Sentence-Transformers](https://www.sbert.
 
 最终在 LCQMC 数据集上的效果
 
-| Lib                                             | pretrained model                                     | accuracy(dev/test) | f1(dev/test)      |
-| ----------------------------------------------- | ---------------------------------------------------- | ------------------ | ----------------- |
-| sentence-transformers                           | distilbert-multilingual<br />-nli-stsb-quora-ranking | 0.8741/0.8745      | 0.8753/0.8744     |
-| sentence-transformers                           | bert-base-chinese                                    | **0.8890/0.8796**  | **0.8898/0.8794** |
-| transformers<br />BertForSiameseNetwork         | bert-base-chinese                                    | 0.8818/0.8705      | 0.8810/0.8701     |
-| transformers<br />BertForSequenceClassification | bert-base-chinese                                    | 0.8832/0.8600      | 0.8848/0.8706     |
+| Lib                                                          | lcqmc<br />acc(dev/test) | customized<br />acc(dev/test) | lcqmc<br />f1(dev/test) | customized<br />f1(dev/test) |
+| ------------------------------------------------------------ | ------------------------ | ----------------------------- | ----------------------- | ---------------------------- |
+| sentence-transformers<br />(distilbert-multilingual<br />-nli-stsb-quora-ranking)<br />lcqmc dataset | 0.8741/0.8745            |                               | 0.8753/0.8744           |                              |
+| **sentence-transformers<br />(bert-base-chinese)**<br />lcqmc dataset | **0.8890/0.8796**        | 0.6650                        | **0.8898/0.8794**       | 0.6297                       |
+| **sentence-transformers<br />(bert-base-chinese)**<br />customized dataset |                          |                               |                         |                              |
+| transformers<br />BertForSiameseNetwork<br />lcqmc dataset   | 0.8818/0.8705            |                               | 0.8810/0.8701           |                              |
+| transformers<br />BertForSequenceClassification<br />lcqmc dataset | 0.8832/0.8600            |                               | 0.8848/0.8706           |                              |
+| transformers<br />BertForSiameseNetwork<br />original-3Layers<br />lcqmc dataset | 0.6791/0.7417            |                               | 0.6584/0.7403           |                              |
+| transformers<br />BertForSiameseNetwork<br />distillation-3Layers<br />lcqmc dataset |                          |                               |                         |                              |
+| *bert-base-chinese*                                          |                          |                               |                         |                              |
+| *bert-base-chinese<br />original-3Layers*                    |                          |                               |                         |                              |
 
 > 其中前三个为双塔模型，使用 dev 数据获得最高正确率的余弦距离阈值，然后进行 test 的正确率计算
 >
-> 最后一个为基于交互的模型，将拼接句对作为输入，输出分类标签
+> `BertForSequenceClassification`为基于交互的模型，将拼接句对作为输入，输出分类标签
+>
+> `original-3Layers` 为SiameseNetwork微调后取第3层输出结果
+>
+> `distillation-3Layers` 为蒸馏到3层的结果
+>
+> 最后两个为原始 BERT 模型最后一层和第三层结果
+>
+> 除第一个特殊说明以外，其他全部使用 `bert-base-chines` 初始化
+>
+> lcqmc threshold 0.84, customized threshold 0.77
 
 
 
 ### 模型蒸馏
 
- [TextBrewer](https://github.com/airaria/TextBrewer) 基于 Transformers 的模型蒸馏工具
+ [TextBrewer](https://github.com/airaria/TextBrewer) 基于 Transformers 的模型蒸馏工具，[官方 入门示例](https://github.com/airaria/TextBrewer/tree/master/examples/random_tokens_example) ，[官方 cmrc2018示例](https://github.com/airaria/TextBrewer/tree/master/examples/cmrc2018_example)
+
+使用上述 transformers Trainer 中实现的 `BertForSiameseNet` ，`SiameseDataset` 等自定义类
+
+主要步骤：
+
+- 读取 teacher 和 student 的配置文件（student 配置文件可以直接修改 teacher 中的 `num_hidden_layer`）
+
+- 构建 `SiameseDataset` 数据集，调用 `Collator.batching_collate` 函数并初始化 `DataLoader` （`Trainer` 中内部完成初始化，`TextBrewer` 需要直接传入）
+
+- 创建 teacher 和 student 的 `BertForSiameseNet` 模型，并加载预训练参数（teacher 模型设置为 `eval` 模式， 即训练过程中参数不改变， 只提供中间层和输出层状态给 student 参考 ）
+
+- 创建 optimizer 以及 TrainingConfig 和 DistillationConfig （以及 `intermediate_matches` ，即 teacher 和 student 中间层的映射方法）
+
+- 创建 `Adaptor`，用于解释 `BertForSiamesNet` 的输出，用于后续映射计算
+
+  > 根据 `intermediate_matches` ，模型需要输出 hidden_states
+  >
+  > 然后 `BertForSiameseNet` 中每个句子都有 hidden_states，目前解决方法时直接选择第一个句子的返回
+
+- 创建 `GeneralDistiller`
+
+- 创建评估回调函数 `predict` ，可以直接使用之前的 `compute_metrics` 计算各指标
 
 
 
