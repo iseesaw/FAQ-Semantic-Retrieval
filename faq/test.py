@@ -6,6 +6,7 @@
 # @Version : 1.0.0
 
 import time
+import random
 import numpy as np
 import pandas as pd
 
@@ -16,10 +17,12 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from sklearn.metrics.pairwise import cosine_similarity
-from sentence_transformers import SentenceTransformer, util
+from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
+from sentence_transformers import SentenceTransformer, util, models
 
-from utils import load_json, cos_dist
-from enc_client import EncodeClient
+from utils import load_json, cos_dist, save_json
+from encode_client import EncodeClient
 
 
 def dis_test():
@@ -176,6 +179,144 @@ def sentence_search_test(topk=5):
         print("\n\n========\n")
 
 
+def load_ddqa():
+    # v_inc_sim_q_id,std_q_id,std_q,similar_q,tags,src,start_date,end_date,rank
+    data = pd.read_csv('ddqa/faq.csv')
+    ques, labels = [], []
+    for _, row in data.iterrows():
+        if row['rank'] == 1:
+            labels.append(row['std_q_id'])
+            ques.append(row['std_q'])
+        labels.append(row['std_q_id'])
+        ques.append(row['similar_q'])
+
+    return ques, labels
+
+
+def load_hflqa():
+    data = load_json('hflqa/faq.json')
+    ques, labels = [], []
+    for idx, (_, post_resp) in enumerate(data.items()):
+        for post in post_resp['post']:
+            ques.append(post)
+            labels.append(idx)
+
+    return ques, labels
+
+
+def compute_acc():
+    is_transformers = True
+    # model_path = '/users6/kyzhang/embeddings/bert/bert-base-chinese'
+    # model_path = './output/training-OnlineConstrativeLoss-customized-bert-base-chinese/0_BERT'
+    model_path = './distills/outputs/bert_L3'
+    if is_transformers:
+        # 使用 BERT 作为 encoder
+        word_embedding_model = models.BERT(model_path)
+        # 使用 mean pooling 获得句向量表示
+        pooling_model = models.Pooling(
+            word_embedding_model.get_word_embedding_dimension(),
+            pooling_mode_mean_tokens=True,
+            pooling_mode_cls_token=False,
+            pooling_mode_max_tokens=False)
+        embedder = SentenceTransformer(
+            modules=[word_embedding_model, pooling_model], device='cuda')
+
+    else:
+        embedder = SentenceTransformer(model_path, device='cuda')
+
+    ques, labels = load_hflqa()
+    X_train, X_test, y_train, y_test = train_test_split(ques,
+                                                        labels,
+                                                        test_size=0.1)
+
+    corpus_embeddings = embedder.encode(X_train,
+                                        show_progress_bar=True,
+                                        batch_size=512,
+                                        convert_to_tensor=True)
+    # corpus_mat_norm = np.linalg.norm(corpus_embeddings)
+
+    query_embeddings = embedder.encode(X_test,
+                                       show_progress_bar=True,
+                                       batch_size=512,
+                                       convert_to_tensor=True)
+
+    print(query_embeddings.shape, corpus_embeddings.shape)
+    hits = util.semantic_search(query_embeddings, corpus_embeddings)
+
+    res = [
+        1 if y_train[hit[0]['corpus_id']] == y else 0
+        for hit, y in zip(hits, y_test)
+    ]
+    print(sum(res) / len(res))
+    # while True:
+    #     inp_question = input("Please enter a question: ")
+
+    #     start_time = time.time()
+    #     question_embedding = embedder.encode(inp_question,
+    #                                          convert_to_tensor=True)
+    #     # （num_query, num_corpus）
+    #     hits = util.semantic_search(question_embedding, corpus_embeddings)
+    #     end_time = time.time()
+
+    #     # Get the hits for the first query
+    #     hits = hits[0]
+
+    #     print("Input question:", inp_question)
+    #     print("Results (after {:.3f} seconds):".format(end_time - start_time))
+    #     for hit in hits[:5]:
+    #         print("\t{:.3f}\t{}".format(hit['score'],
+    #                                     qs[hit['corpus_id']]))
+
+    #     print("\n\n========\n")
+
+
+def split_hflqa():
+    data = load_json('hflqa/faq.json')
+    topics, posts = [], []
+    for topic, post_resp in data.items():
+        for post in post_resp['post']:
+            topics.append(topic)
+            posts.append(post)
+
+    train_posts, test_posts, train_topics, test_topics = train_test_split(
+        posts, topics, test_size=0.1)
+
+    save_faq(train_posts, train_topics, 'hflqa/train_faq.json')
+    save_faq(test_posts, test_topics, 'hflqa/test_faq.json')
+
+
+def save_faq(posts, topics, filename):
+    data = {}
+    for post, topic in zip(posts, topics):
+        if topic not in data:
+            data[topic] = {'post': []}
+        data[topic]['post'].append(post)
+
+    save_json(data, filename)
+
+
+def merge():
+    for mode in ['train', 'test']:
+        lcqmc = pd.read_csv(f'lcqmc/LCQMC_{mode}.csv')
+        hflqa = pd.read_csv(f'samples/{mode}.csv')
+
+        total = shuffle(pd.concat([lcqmc, hflqa]))
+        total.to_csv(f'samples/merge_{mode}.csv', index=None)
+
+def export_ddqa():
+    ques, labels = load_ddqa()
+    data = {}
+    for l, q in zip(labels, ques):
+        if l not in data:
+            data[l] = {'post': []}
+        data[l]['post'].append(q)
+
+    save_json(data, 'ddqa/faq.json')
+
 if __name__ == '__main__':
     # dis_test()
-    sentence_transformers_test()
+    # sentence_transformers_test()
+    compute_acc()
+    # split_hflqa()
+    # merge()
+    # export_ddqa()

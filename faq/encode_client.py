@@ -30,8 +30,9 @@ class EncodeClient:
         # Using GPU
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print('using', self.device)
-        self.model.to(self.device)
-
+        self.model.to(self.device) 
+        self.model.eval()
+        
         self.max_length = max_length
         print('ending initing')
 
