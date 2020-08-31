@@ -2,7 +2,6 @@
 */.vscode/
 *.npy
 *.pyc
-*.json
 *.csv
 faq/hflqa/
 faq/lcqmc/
