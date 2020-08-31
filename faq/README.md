@@ -539,36 +539,6 @@ fine-tune 可以使用高度封装的 [Sentence-Transformers](https://www.sbert.
 
 
 
-最终在 LCQMC 数据集上的效果
-
-| Lib                                                          | lcqmc<br />acc(dev/test) | customized<br />acc(dev/test) | lcqmc<br />f1(dev/test) | customized<br />f1(dev/test) |
-| ------------------------------------------------------------ | ------------------------ | ----------------------------- | ----------------------- | ---------------------------- |
-| sentence-transformers<br />(distilbert-multilingual<br />-nli-stsb-quora-ranking)<br />lcqmc dataset | 0.8741/0.8745            |                               | 0.8753/0.8744           |                              |
-| **sentence-transformers<br />(bert-base-chinese)**<br />lcqmc dataset | **0.8890/0.8796**        | 0.6650                        | **0.8898/0.8794**       | 0.6297                       |
-| **sentence-transformers<br />(bert-base-chinese)**<br />customized dataset |                          |                               |                         |                              |
-| transformers<br />BertForSiameseNetwork<br />lcqmc dataset   | 0.8818/0.8705            |                               | 0.8810/0.8701           |                              |
-| transformers<br />BertForSequenceClassification<br />lcqmc dataset | 0.8832/0.8600            |                               | 0.8848/0.8706           |                              |
-| transformers<br />BertForSiameseNetwork<br />original-3Layers<br />lcqmc dataset | 0.6791/0.7417            |                               | 0.6584/0.7403           |                              |
-| transformers<br />BertForSiameseNetwork<br />distillation-3Layers<br />lcqmc dataset |                          |                               |                         |                              |
-| *bert-base-chinese*                                          |                          |                               |                         |                              |
-| *bert-base-chinese<br />original-3Layers*                    |                          |                               |                         |                              |
-
-> 其中前三个为双塔模型，使用 dev 数据获得最高正确率的余弦距离阈值，然后进行 test 的正确率计算
->
-> `BertForSequenceClassification`为基于交互的模型，将拼接句对作为输入，输出分类标签
->
-> `original-3Layers` 为SiameseNetwork微调后取第3层输出结果
->
-> `distillation-3Layers` 为蒸馏到3层的结果
->
-> 最后两个为原始 BERT 模型最后一层和第三层结果
->
-> 除第一个特殊说明以外，其他全部使用 `bert-base-chines` 初始化
->
-> lcqmc threshold 0.84, customized threshold 0.77
-
-
-
 ### 模型蒸馏
 
  [TextBrewer](https://github.com/airaria/TextBrewer) 基于 Transformers 的模型蒸馏工具，[官方 入门示例](https://github.com/airaria/TextBrewer/tree/master/examples/random_tokens_example) ，[官方 cmrc2018示例](https://github.com/airaria/TextBrewer/tree/master/examples/cmrc2018_example)
@@ -594,6 +564,27 @@ fine-tune 可以使用高度封装的 [Sentence-Transformers](https://www.sbert.
 - 创建 `GeneralDistiller`
 
 - 创建评估回调函数 `predict` ，可以直接使用之前的 `compute_metrics` 计算各指标
+
+
+
+### 实验结果
+
+| model/pretrained<br />dataset/layers                         | lcqmc<br />acc(dev/test) | customized<br />acc(dev/test) | lcqmc<br />f1(dev/test) | customized<br />f1(dev/test) |
+| ------------------------------------------------------------ | ------------------------ | :---------------------------- | ----------------------- | ---------------------------- |
+| sentence-transformers<br />(distilbert-multilingual<br />-nli-stsb-quora-ranking)<br /> :steam_locomotive: lcqmc dataset | 0.8741/0.8745            |                               | 0.8753/0.8744           |                              |
+| **sentence-transformers<br />(bert-base-chinese)**<br />:steam_locomotive: ​lcqmc dataset | **0.8890/0.8796**        | 0.6650                        | **0.8898/0.8794**       | 0.6297                       |
+| *model from above* :point_up_2: <br />:steam_locomotive: ​customized dataset |                          |                               |                         |                              |
+| *model from above* :point_up_2:<br />:steam_locomotive: lcqmc + customized dataset |                          |                               |                         |                              |
+| 🤗 transformers<br />BertForSiameseNetwork<br />(bert-base-chinese)<br />:steam_locomotive: ​lcqmc dataset | 0.8818/0.8705            |                               | 0.8810/0.8701           |                              |
+| *3 layers from above* :point_up_2:                           | 0.6791/0.7417            |                               | 0.6584/0.7403           |                              |
+| 🤗 transformers<br />BertForSequenceClassification<br /> (bert-base-chinese)<br />:steam_locomotive: ​lcqmc dataset | 0.8832/0.8600            |                               | 0.8848/0.8706           |                              |
+| 🤗 transformers + textbrewer<br />BertForSiameseNetwork<br />distillation-L3<br />:steam_locomotive: ​lcqmc dataset |                          |                               |                         |                              |
+| *bert-base-chinese*                                          |                          |                               |                         |                              |
+| *3 layers from above* :point_up_2:                           |                          |                               |                         |                              |
+| *6 layers from above* :point_up_2:                           |                          |                               |                         |                              |
+| *3 layers from above* :point_up_2:<br />:steam_locomotive: ​lcqmc dataset |                          |                               |                         |                              |
+
+> lcqmc threshold 0.84, customized threshold 0.77
 
 
 
