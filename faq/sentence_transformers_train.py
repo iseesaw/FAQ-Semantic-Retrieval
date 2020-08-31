@@ -5,7 +5,7 @@
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
 import os
-import logging
+import pprint
 import argparse
 
 import pandas as pd
@@ -17,12 +17,6 @@ from sentence_transformers import SentencesDataset, LoggingHandler, SentenceTran
 from sentence_transformers.readers import InputExample
 
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
-
-# 打印日志
-logging.basicConfig(format='%(asctime)s - %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    level=logging.INFO,
-                    handlers=[LoggingHandler()])
 
 
 def load_train_samples(filename):
@@ -92,9 +86,24 @@ def train(args):
 
 
 def test(args):
-    sents1, sents2, labels = load_dev_sentences(args.testset_path)
     model = SentenceTransformer(args.model_save_path, device='cuda')
 
+    # 开放集评估
+    dev_sentences1, dev_sentences2, dev_labels = load_dev_sentences(
+        args.devset_path)
+    binary_acc_evaluator = evaluation.BinaryClassificationEvaluator(
+        dev_sentences1, dev_sentences2, dev_labels)
+    model.evaluate(binary_acc_evaluator, args.model_save_path)
+
+    # 开发集阈值
+    result = pd.read_csv(
+        os.path.join(args.model_save_path,
+                     'binary_classification_evaluation_results.csv'))
+    max_idx = result['cosine_acc'].argmax()
+    threshold = result['cosine_acc_threshold'].values[max_idx]
+
+    # 测试集评估
+    sents1, sents2, labels = load_dev_sentences(args.testset_path)
     vec_sents1 = model.encode(sents1,
                               batch_size=args.eval_batch_size,
                               show_progress_bar=True,
@@ -107,20 +116,17 @@ def test(args):
     cos = torch.nn.CosineSimilarity()
     scores = cos(vec_sents1, vec_sents2).cpu()
 
-    # 读取开发集上的阈值
-    result = pd.read_csv(
-        os.path.join(args.model_save_path,
-                     'binary_classification_evaluation_results.csv'))
-    threshold = result['cosine_acc_threshold'].values[-1]
-
-    # 计算正确率
+    # 测试集结果
     preds = [1 if s > threshold else 0 for s in scores]
     acc = accuracy_score(labels, preds)
     p_r_f1 = precision_recall_fscore_support(labels, preds, average='macro')
-    print('accuracy', acc)
-    print('macro_precision', p_r_f1[0])
-    print('macro_recall', p_r_f1[1])
-    print('macro_f1', p_r_f1[2])
+    test_result = {
+        'accuracy': acc,
+        'macro_precision': p_r_f1[0],
+        'macro_recall': p_r_f1[1],
+        'macro_f1': p_r_f1[2]
+    }
+    pprint.pprint(test_result)
 
 
 if __name__ == '__main__':
@@ -135,18 +141,19 @@ if __name__ == '__main__':
         '--model_name_or_path',
         type=str,
         default=
-        '/users6/kyzhang/embeddings/bert/bert-base-chinese'
+        'output/training-OnlineConstrativeLoss-LCQMC-bert-base-chinese/0_BERT'
+        #'/users6/kyzhang/embeddings/bert/bert-base-chinese'
         #'/users6/kyzhang/embeddings/distilbert/distilbert-multilingual-nli-stsb-quora-ranking/'
     )
     parser.add_argument('--trainset_path',
                         type=str,
-                        default='lcqmc/LCQMC_train.csv')
+                        default='samples/train_cluster750_p4_ln2_gn2.csv')
     parser.add_argument('--devset_path',
                         type=str,
-                        default='lcqmc/LCQMC_dev.csv')
+                        default='samples/test_cluster750_p4_ln2_gn2.csv')
     parser.add_argument('--testset_path',
                         type=str,
-                        default='lcqmc/LCQMC_test.csv')
+                        default='samples/test_cluster750_p4_ln2_gn2.csv')
 
     parser.add_argument('--num_epochs', type=int, default=10)
     parser.add_argument('--train_batch_size', type=int, default=64)
@@ -159,9 +166,11 @@ if __name__ == '__main__':
         type=float,
         default=0.5,
         help='Negative pairs should have a distance of at least 0.5')
-    parser.add_argument('--model_save_path',
-                        type=str,
-                        default='output/training-OnlineConstrativeLoss-LCQMC-bert-base-chinese')
+    parser.add_argument(
+        '--model_save_path',
+        type=str,
+        default='output/training-OnlineConstrativeLoss-customized-bert-base-chinese'
+    )
 
     args = parser.parse_args()
 

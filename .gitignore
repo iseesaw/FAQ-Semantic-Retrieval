@@ -1,11 +1,13 @@
 .vscode
+*/.vscode/
 *.npy
 *.pyc
-*.json
 *.csv
 faq/hflqa/
 faq/lcqmc/
 faq/output/
 faq/samples/
+faq/distills/outputs/
 *.DS_Store
 */logs/
+*/__pycache__/

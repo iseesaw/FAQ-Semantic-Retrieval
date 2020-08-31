@@ -6,10 +6,18 @@
 # @Version : 1.0.0
 
 import time
+import logging
 import numpy as np
 
 from utils import load_json, cos_dist
 from enc_client import EncodeClient
+
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
+    datefmt="%Y/%m/%d %H:%M:%S",
+    level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 def init():
     '''加载预处理数据
