@@ -577,30 +577,50 @@ fine-tune 可以使用高度封装的 [Sentence-Transformers](https://www.sbert.
 - [ ] 
 - [ ] 获得通用领域 6-layers BERT 句向量编码器
 
-| model/pretrained<br/>dataset/layers                          | lcqmc<br/>acc     | lcqmc<br/>f1      | hflqa<br/>acc | hflqa<br/>f1 | hflqa<br/>hit@1           |
-| ------------------------------------------------------------ | ----------------- | ----------------- | :------------ | ------------ | ------------------------- |
-| *bert-base-chinese*                                          | -                 | -                 | -             | -            | 0.7394                    |
-| *6 layers from above* :point_up_2:                           | -                 | -                 | -             | -            | 0.7276                    |
-| *6 layers from above* :point_up_2:<br/>:steam_locomotive: ​merge dataset |                   |                   |               |              | :running_man:             |
-| **sentence-transformers<br/>(bert-base-chinese)**<br/>:steam_locomotive: ​lcqmc dataset | **0.8890/0.8796** | **0.8898/0.8794** |               |              | 0.8350                    |
-| *model from above* :point_up_2: <br/>:steam_locomotive: ​hflqa dataset |                   |                   |               |              | :running:<br />customized |
-| 🤗 transformers<br />BertForSiameseNet<br/>(bert-base-chinese)<br/>:steam_locomotive: ​lcqmc dataset | 0.8818/0.8705     | 0.8810/0.8701     | 0.7333        | 0.5212       |                           |
-| *model from above* :point_up_2: <br />:steam_locomotive: merge dataset |                   |                   |               |              | :running:                 |
-| *6 layers from above* :point_up_2:                           | 0.6791/0.7417     | 0.6584/0.7403     |               |              |                           |
-| 🤗 transformers<br/>BertForSeqClassify<br/> (bert-base-chinese)<br/>:steam_locomotive: ​lcqmc dataset | 0.8832/0.8600     | 0.8848/0.8706     | -             | -            | -                         |
-| 🤗 transformers + textbrewer<br/>BertForSiameseNet<br/>distillation-L6<br/>:steam_locomotive: ​merge dataset + ddqa |                   |                   |               |              |                           |
-| universal model                                              |                   |                   |               |              |                           |
+| model/pretrained<br/>dataset/layers                          | lcqmc<br/>acc | lcqmc<br/>f1  | hflqa<br/>acc | hflqa<br/>f1 | hflqa<br/>hit@1   | ddqa<br/>hit@1    |
+| ------------------------------------------------------------ | ------------- | ------------- | :------------ | ------------ | ----------------- | ----------------- |
+| *bert-base-chinese*                                          | -             | -             | -             | -            | 0.7394            | -                 |
+| *6 layers from above* :point_up_2:                           | -             | -             | -             | -            | 0.7276            | -                 |
+| *6 layers from above* :point_up_2:<br/>:steam_locomotive: ​merge dataset | 0.8789/0.8664 | 0.8799/0.8660 | 0.9100        | 0.8920       | 0.8463            | -                 |
+| sentence-transformers<br/>(bert-base-chinese)<br/>:steam_locomotive: ​lcqmc dataset | 0.8890/0.8796 | 0.8898/0.8794 | 0.7333        | 0.5212       | 0.8350            | -                 |
+| *model from above* :point_up_2: <br/>:steam_locomotive: ​hflqa data | -             | -             | -             | -            | 0.8562            | -                 |
+| 🤗 transformers<br />BertForSiameseNet<br/>(bert-base-chinese)<br/>:steam_locomotive: ​lcqmc dataset | 0.8818/0.8705 | 0.8810/0.8701 | 0.7333        | 0.5212       | 0.8177            | -                 |
+| *model from above* :point_up_2: <br />:steam_locomotive: merge dataset | 0.8848/0.8751 | 0.8837/0.8749 | 0.9225        | 0.9053       | 0.8567            | 0.8500            |
+| *6 layers from above* :point_up_2:                           | 0.6791/0.7417 | 0.6584/0.7403 | 0.7913        | 0.7429       | 0.7975            |                   |
+| 🤗 transformers<br/>BertForSeqClassify<br/> (bert-base-chinese)<br/>:steam_locomotive: ​lcqmc dataset | 0.8832/0.8600 | 0.8848/0.8706 | -             | -            | -                 | -                 |
+| 🤗 transformers + textbrewer<br/>BertForSiameseNet<br/>distillation-L6<br/>:steam_locomotive: ​merge dataset + ddqa |               |               |               |              |                   |                   |
+| 🤗 transformers<br />BertForSiameseNet<br/>:steam_locomotive: merge3(l<br/>cqmc+hflqa+ddqa) |               |               |               |              |                   |                   |
+| checkpoint-3000<br/>12 vs 6-layers:point_up_2:               | -             | -             | -             | -            | 0.8980<br/>0.9128 | 0.9961<br/>0.8201 |
 
 > 内部 hflqa 数据集（posts）按9:1拆分，acc 和 f1 为问题对形式测试集（根据阈值分类），hit@1 为检索测试集（真实场景）
 >
-> | dataset | topics | posts | positive(sampling) | negative(sampling) | total(sampling) |
-> | ------- | ------ | ----- | ------------------ | ------------------ | --------------- |
-> | train   | 1468   | 18267 | 59069              | 67227              | 126296          |
-> | test    | 768    | 2030  | 2984               | 7148               | 10132           |
-> | total   | 1500   | 20297 | -                  | -                  | -               |
-> | ddqa    | -      | -     | 419363             | 456992             | 876355          |
+> | dataset     | topics | posts | positive(sampling) | negative(sampling) | total(sampling) |
+> | ----------- | ------ | ----- | ------------------ | ------------------ | --------------- |
+> | hflqa-train | 1468   | 18267 | 5w+                | 5w+                | 10w+            |
+> | hflqa-test  | 768    | 2030  | 2984               | 7148               | 10132           |
+> | hflqa-total | 1500   | 20297 | -                  | -                  | -               |
+> | lcqmc       | -      | -     | -                  | -                  | 24w+            |
+> | ddqa        | -      | 12w+  | 50w+               | 50w+               | 100w+           |
+> | merge3      | -      | -     | -                  | -                  | 134w+           |
 
+关于采样的几个结果
 
+- 聚类结果越少，负例越简单，可以用原始主题数/类别数 除以5
+- gmm 和 kmeans 差别不是很大
+
+关于 hflqa 召回结果
+
+- hflqa + lcqmc
+  - 2000 hflqa 测试集 hit@1 大约 85% 左右
+  - 错误原因主要是 hflqa 数据问题
+    - 存在意思相同的 topic，自动评测无法区分，认定为失败（实际是正确的）
+    - 一些不常用表达或者表达不完整的句子
+    - 正常对话的召回率较高
+
+- hflqa + lcqmc + ddqa
+  - 2000 hflqa 测试集，6层比12层效果好一个点，hit@1 约 90%
+  - 10000 ddqa 测试集，12层 hit@1 达到 99%，6层只有 82%
+  - 前面的层学到了较为
 
 
 
