@@ -193,13 +193,13 @@ def load_ddqa():
     return ques, labels
 
 
-def load_hflqa():
-    data = load_json('hflqa/faq.json')
+def load_faq(filename='hflqa/faq.json'):
+    data = load_json(filename)
     ques, labels = [], []
-    for idx, (_, post_resp) in enumerate(data.items()):
+    for idx, (topic, post_resp) in enumerate(data.items()):
         for post in post_resp['post']:
             ques.append(post)
-            labels.append(idx)
+            labels.append(topic)
 
     return ques, labels
 
@@ -207,8 +207,9 @@ def load_hflqa():
 def compute_acc():
     is_transformers = True
     # model_path = '/users6/kyzhang/embeddings/bert/bert-base-chinese'
-    # model_path = './output/training-OnlineConstrativeLoss-customized-bert-base-chinese/0_BERT'
-    model_path = './distills/outputs/bert_L3'
+    # model_path = './output/training-OnlineConstrativeLoss-hflqa-beta1.5-gmm-bert/0_BERT'
+    # model_path = './output/transformers-merge-bert-base-chinese'
+    model_path = './output/transformers-merge3-bert/checkpoint-9000'
     if is_transformers:
         # 使用 BERT 作为 encoder
         word_embedding_model = models.BERT(model_path)
@@ -220,14 +221,17 @@ def compute_acc():
             pooling_mode_max_tokens=False)
         embedder = SentenceTransformer(
             modules=[word_embedding_model, pooling_model], device='cuda')
-
     else:
         embedder = SentenceTransformer(model_path, device='cuda')
 
-    ques, labels = load_hflqa()
-    X_train, X_test, y_train, y_test = train_test_split(ques,
-                                                        labels,
-                                                        test_size=0.1)
+    # ques, labels = load_ddqa() #load_hflqa()
+    # X_train, X_test, y_train, y_test = train_test_split(ques,
+    #                                                     labels,
+    #                                                     test_size=0.1)
+
+    proj = 'hflqa'
+    X_train, y_train = load_faq(f'{proj}/train_faq.json')
+    X_test, y_test = load_faq(f'{proj}/test_faq.json')
 
     corpus_embeddings = embedder.encode(X_train,
                                         show_progress_bar=True,
@@ -243,11 +247,21 @@ def compute_acc():
     print(query_embeddings.shape, corpus_embeddings.shape)
     hits = util.semantic_search(query_embeddings, corpus_embeddings)
 
+    # data = []
+    # for x, y, hit in zip(X_test, y_test, hits):
+    #     cands = [y_train[hit[i]['corpus_id']] for i in range(3)]
+    #     if y not in cands:
+    #         cands.insert(0, y)
+    #         cands.insert(0, x)
+    #         data.append(cands)
+    # pd.DataFrame(data=data, columns=['query', 'std_q', 'error1', 'error2', 'error3']).to_csv('error_cands.csv', index=None)
     res = [
-        1 if y_train[hit[0]['corpus_id']] == y else 0
+        1 if y in [y_train[hit[i]['corpus_id']] for i in range(10)] else 0
         for hit, y in zip(hits, y_test)
     ]
-    print(sum(res) / len(res))
+    acc = sum(res) / len(res)
+    print(acc)
+    # return acc
     # while True:
     #     inp_question = input("Please enter a question: ")
 
@@ -270,8 +284,8 @@ def compute_acc():
     #     print("\n\n========\n")
 
 
-def split_hflqa():
-    data = load_json('hflqa/faq.json')
+def split_faq(proj):
+    data = load_json(f'{proj}/faq.json')
     topics, posts = [], []
     for topic, post_resp in data.items():
         for post in post_resp['post']:
@@ -281,8 +295,8 @@ def split_hflqa():
     train_posts, test_posts, train_topics, test_topics = train_test_split(
         posts, topics, test_size=0.1)
 
-    save_faq(train_posts, train_topics, 'hflqa/train_faq.json')
-    save_faq(test_posts, test_topics, 'hflqa/test_faq.json')
+    save_faq(train_posts, train_topics, f'{proj}/train_faq.json')
+    save_faq(test_posts, test_topics, f'{proj}/test_faq.json')
 
 
 def save_faq(posts, topics, filename):
@@ -296,12 +310,19 @@ def save_faq(posts, topics, filename):
 
 
 def merge():
-    for mode in ['train', 'test']:
-        lcqmc = pd.read_csv(f'lcqmc/LCQMC_{mode}.csv')
-        hflqa = pd.read_csv(f'samples/{mode}.csv')
+    # for mode in ['train', 'test']:
+    #     lcqmc = pd.read_csv(f'lcqmc/LCQMC_{mode}.csv')
+    #     hflqa = pd.read_csv(f'samples/{mode}_beta1.5_gmm_p4_n42.csv')
 
-        total = shuffle(pd.concat([lcqmc, hflqa]))
-        total.to_csv(f'samples/merge_{mode}.csv', index=None)
+    #     total = shuffle(pd.concat([lcqmc, hflqa]))
+    #     total.to_csv(f'samples/merge_{mode}_beta1.5_gmm_p4_n42.csv', index=None)
+
+    lcqmc = pd.read_csv(f'samples/ddqa_beta2_kmeans_p5_n32.csv')
+    hflqa = pd.read_csv(f'samples/merge_train_beta1.5_gmm_p4_n42.csv')
+
+    total = shuffle(pd.concat([lcqmc, hflqa]))
+    total.to_csv(f'samples/merge3.csv', index=None)
+
 
 def export_ddqa():
     ques, labels = load_ddqa()
@@ -313,10 +334,16 @@ def export_ddqa():
 
     save_json(data, 'ddqa/faq.json')
 
+
 if __name__ == '__main__':
     # dis_test()
     # sentence_transformers_test()
     compute_acc()
-    # split_hflqa()
+    """scores = []
+    for _ in range(5):
+        scores.append(compute_acc())
+    print(scores)
+    print(sum(scores)/len(scores))"""
+    # split_faq('ddqa')
     # merge()
     # export_ddqa()

@@ -36,16 +36,6 @@ class InputExample:
                  texts: List[str] = None,
                  texts_tokenized: List[List[int]] = None,
                  label: Union[int, float] = None):
-        """
-        :param guid
-            样本唯一标识ID
-        :param texts
-            句对文本
-        :param texts_tokenized
-            [可选] 是否已经分词
-        :param label
-            样本标签
-        """
         self.guid = guid
         self.texts = [text.strip()
                       for text in texts] if texts is not None else texts
@@ -376,21 +366,22 @@ if __name__ == '__main__':
     parser.add_argument('--do_predict', type=ast.literal_eval, default=True)
     parser.add_argument('--trainset_path',
                         type=str,
-                        default='lcqmc/LCQMC_train.csv')
+                        default='samples/merge3.csv')
     parser.add_argument('--devset_path',
                         type=str,
-                        default='lcqmc/LCQMC_dev.csv')
+                        default='samples/test_beta1.5_gmm_p5_n41.csv')
     parser.add_argument('--testset_path',
                         type=str,
-                        default='lcqmc/LCQMC_test.csv')
+                        default='samples/test_beta1.5_gmm_p5_n41.csv')
 
     parser.add_argument(
         '--model_name_or_path',
-        default='/users6/kyzhang/embeddings/bert/bert-base-chinese')
+        default='./output/transformers-merge-bert-base-chinese')
+        # default='/users6/kyzhang/embeddings/bert/bert-base-chinese')
     parser.add_argument('--max_length', type=int, default=128)
     parser.add_argument('--num_train_epochs', type=int, default=10)
-    parser.add_argument('--per_device_train_batch_size', type=int, default=256)
-    parser.add_argument('--per_device_eval_batch_size', type=int, default=256)
+    parser.add_argument('--per_device_train_batch_size', type=int, default=80)
+    parser.add_argument('--per_device_eval_batch_size', type=int, default=128)
     parser.add_argument('--warmup_steps', type=int, default=500)
     parser.add_argument('--weight_decay', type=float, default=0.01)
     parser.add_argument('--save_steps', type=int, default=1000)
@@ -403,8 +394,10 @@ if __name__ == '__main__':
     parser.add_argument('--output_hidden_states',
                         type=ast.literal_eval,
                         default=False)
-    parser.add_argument('--output_dir',
-                        default='./output/transformers-bert-L3')
+    parser.add_argument(
+        '--output_dir',
+        default=
+        './output/transformers-merge3-bert')
     parser.add_argument('--logging_dir', type=str, default='./logs')
 
     args = parser.parse_args()
