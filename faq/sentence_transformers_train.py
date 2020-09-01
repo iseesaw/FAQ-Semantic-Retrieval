@@ -141,21 +141,21 @@ if __name__ == '__main__':
         '--model_name_or_path',
         type=str,
         default=
-        'output/training-OnlineConstrativeLoss-LCQMC-bert-base-chinese/0_BERT'
+        'output/transformers-merge-bert-base-chinese'
         #'/users6/kyzhang/embeddings/bert/bert-base-chinese'
         #'/users6/kyzhang/embeddings/distilbert/distilbert-multilingual-nli-stsb-quora-ranking/'
     )
     parser.add_argument('--trainset_path',
                         type=str,
-                        default='samples/train.csv')
+                        default='samples/merge_train_beta1.5_gmm_p4_n42.csv')
     parser.add_argument('--devset_path',
                         type=str,
-                        default='samples/test.csv')
+                        default='samples/train_beta1.5_gmm_p5_n41.csv')
     parser.add_argument('--testset_path',
                         type=str,
-                        default='samples/test.csv')
+                        default='samples/train_beta1.5_gmm_p5_n41.csv')
 
-    parser.add_argument('--num_epochs', type=int, default=10)
+    parser.add_argument('--num_epochs', type=int, default=5)
     parser.add_argument('--train_batch_size', type=int, default=128)
     parser.add_argument('--eval_batch_size', type=int, default=128)
 
@@ -169,8 +169,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--model_save_path',
         type=str,
-        default='output/training-OnlineConstrativeLoss-customized-bert-base-chinese'
-    )
+        default='output/training-OnlineConstrativeLoss-merge-beta1.5-gmm-bert')
 
     args = parser.parse_args()
 

@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 
 from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
 from sklearn.model_selection import train_test_split
 
 from sentence_transformers import models, SentenceTransformer
@@ -80,7 +81,8 @@ def negative_sampling(vectors,
                       labels,
                       n_clusters,
                       local_num_negs=2,
-                      global_num_negs=2):
+                      global_num_negs=2,
+                      algorithm='kmeans'):
     """负采样
     Step1: 读取所有 topic 的 post 并使用预训练的模型编码得到句向量 vectors
     Step2: 使用 KMeans 对句向量 vectors 进行聚类
@@ -97,14 +99,24 @@ def negative_sampling(vectors,
     """
     assert len(vectors) == len(sentences) == len(labels)
     # ref https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html
-    kmeans = KMeans(n_clusters=n_clusters,
-                    random_state=128,
-                    init='k-means++',
-                    n_init=1,
-                    verbose=True)
-    kmeans.fit(vectors)
+    if algorithm == 'kmeans':
+        kmeans = KMeans(n_clusters=n_clusters,
+                        random_state=128,
+                        init='k-means++',
+                        n_init=1,
+                        verbose=True)
+        kmeans.fit(vectors)
+        preds = kmeans.labels_
+    elif algorithm == 'gmm':
+        model = GaussianMixture(n_components=n_clusters,
+                                random_state=128,
+                                verbose=2,
+                                covariance_type='full')
+        model.fit(vectors)
+        preds = model.predict(vectors)
+    else:
+        raise NotImplemented
 
-    preds = kmeans.labels_
     pred2sents = {n: [] for n in range(n_clusters)}
     for idx, pred in enumerate(preds):
         sents = pred2sents.get(pred)
@@ -227,8 +239,8 @@ def main(args):
     vectors = encode(sents,
                      model_name_or_path=args.model_name_or_path,
                      is_transformers=args.is_transformers)
-    n_clusters = args.n_clusters if args.n_clusters != -1 else len(
-        data) // args.hyper_beta
+    n_clusters = args.n_clusters if args.n_clusters != -1 else int(
+        len(data) // args.hyper_beta)
 
     logger.info('n_cluster = %d, local_num_negs = %d, global_num_negs = %d' %
                 (n_clusters, args.local_num_negs, args.global_num_negs))
@@ -237,7 +249,8 @@ def main(args):
                                          labels=labels,
                                          n_clusters=n_clusters,
                                          local_num_negs=args.local_num_negs,
-                                         global_num_negs=args.global_num_negs)
+                                         global_num_negs=args.global_num_negs,
+                                         algorithm=args.algorithm)
     logger.info('sampling %d negative samples' % len(neg_pairs))
 
     # visualize
@@ -256,7 +269,7 @@ def main(args):
         % (len(all_pairs), len(pos_pairs), len(neg_pairs)))
 
     # split & save
-    out_file = 'ddqa.csv'
+    out_file = f'ddqa_beta{args.hyper_beta}_{args.algorithm}_p{args.num_pos}_n{args.local_num_negs}{args.global_num_negs}.csv'
     df = pd.DataFrame(data=all_pairs,
                       columns=['sentence1', 'sentence2', 'label'])
 
@@ -279,11 +292,10 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Negative Sampling Via Clustering')
 
-    parser.add_argument('--filename', default='ddqa/faq.json')
+    parser.add_argument('--filename', default='ddqa/train_faq.json')
     parser.add_argument(
         '--model_name_or_path',
-        default=
-        './output/training-OnlineConstrativeLoss-LCQMC-bert-base-chinese',
+        default='./output/training-OnlineConstrativeLoss-merge-bert-6L',
         help='path of pretrained model which is used to get sentence vector')
     parser.add_argument(
         '--is_transformers',
@@ -292,15 +304,19 @@ if __name__ == '__main__':
         help='transformers model or sentence-transformers model')
     parser.add_argument('--hyper_beta',
                         type=int,
-                        default=8,
+                        default=2,
                         help='hyperparameter')
+    parser.add_argument('--algorithm',
+                        type=str,
+                        default='kmeans',
+                        choices=['kmeans', 'gmm'])
     parser.add_argument(
         '--n_clusters',
         type=int,
         default=-1,
         help='if n_clusters=-1, then n_cluster=n_topics/hyper_m')
-    parser.add_argument('--num_pos', type=int, default=4)
-    parser.add_argument('--local_num_negs', type=int, default=2)
+    parser.add_argument('--num_pos', type=int, default=5)
+    parser.add_argument('--local_num_negs', type=int, default=3)
     parser.add_argument('--global_num_negs', type=int, default=2)
 
     parser.add_argument('--visualized',
@@ -310,7 +326,7 @@ if __name__ == '__main__':
     parser.add_argument('--is_split', type=ast.literal_eval, default=False)
     parser.add_argument('--test_size',
                         type=float,
-                        default=0.1,
+                        default=0.05,
                         help='train/test split size')
     parser.add_argument('--output_dir', type=str, default='./samples')
 
