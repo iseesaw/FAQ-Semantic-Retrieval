@@ -53,14 +53,20 @@ logger = logging.getLogger(__name__)
 
 
 def positive_sampling(data, num_pos=4):
-    """正采样
-    在每个主题内进行正采样
+    """在每个主题内进行正采样
 
-    :param data
-        Dict(str, Dict(str, List[str]))
-    :param num_pos
-    :return pos_pairs
-        List[(str, str)]
+    Args:
+        data (Dict(str, Dict(str, List[str]))): 
+            json形式原始数据
+        num_pos (int, optional): 
+            正采样个数. Defaults to 4.
+            需要依据局部负采样的个数进行调节
+            如果局部负采样的个数较多，采集的负样本会偏少
+            为了保证最终正负样本比例基本为1:1
+            此时正采样个数应该小于全部负采样个数（局部+全局）
+
+    Returns:
+        pos_pairs (List[Tuple(str, str)]): 正样本对
     """
     pos_pairs = []
     for _, post_resp in data.items():
@@ -93,9 +99,21 @@ def negative_sampling(vectors,
             - 局部负采样, 对于每个 post 在每个聚类簇中采样不同 topic 的 post
             - 全局负采样, 对于每个 post 在所有聚类簇中采样不同 topic 的 post
     
-    :return neg_pairs
-        List[Tuple(str, str)]
-        保存负采样结果, 每个元组表示原始标签以及负采样结果（可能保存多个）
+    Args:
+        vectors (List[List[int]]): 待采样问题句向量
+        sentences (List[List[str]]): 待采样问题文本
+        labels (List[int]): 待采样问题真实标签（对应的主题，相同标签的问题表达形式不同，但意思相同）
+        n_clusters (int): 聚类数，可以指定，也可以自动计算，一般为 total_topics / 2（不能太大或者太小）
+        local_num_negs (int, optional): 局部负采样数. Defaults to 2.
+        global_num_negs (int, optional): 全局负采样数. Defaults to 2.
+        algorithm (str, optional): 聚类算法，kmeans 比 gmm 快很多. Defaults to 'kmeans'.
+
+    Raises:
+        NotImplemented: 未实现的聚类方法
+
+    Returns:
+        preds (List[int]): 聚类后标签
+        neg_pairs (List[Tuple(str, str)]): 负样本对
     """
     assert len(vectors) == len(sentences) == len(labels)
     # ref https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html
@@ -152,6 +170,13 @@ def negative_sampling(vectors,
 
 def visualize(vectors, labels, preds, output_dir):
     """聚类结果可视化
+    （类别太多，基本看不出来效果）
+
+    Args:
+        vectors (List[List[int]]): 句向量
+        labels (List[int]): 真实标签
+        preds (List[int]): 预测标签
+        output_dir ([str): 可视化图片保存位置
     """
     # PCA
     pca = PCA(n_components=2, random_state=128)
@@ -172,13 +197,15 @@ def visualize(vectors, labels, preds, output_dir):
 def encode(sentences, model_name_or_path, is_transformers):
     """句向量编码
 
-    :param sentences
-        List[str]
-    :param model_name_or_path
-    :param is_transformers
-        Boolean, transformers model or sentence-transformers model
-    :return vectors
-        List[List[int]]
+    Args:
+        sentences (List[List[str]]): 待编码句子
+        model_name_or_path (str): 预训练模型位置
+        is_transformers (bool): 
+            是否为 Transformers 模型
+            Transformeres 模型需要额外加入平均池化层
+
+    Returns:
+        vectors (List[List[int]]): 句向量
     """
     if is_transformers:
         # 使用 BERT 作为 encoder, 并加载预训练模型
@@ -219,13 +246,13 @@ def main(args):
     logger.info('loading data from %s' % args.filename)
     data = load_data(args.filename)
 
-    # positive sampling
+    # 正采样
     logger.info('** positive sampling **')
     logger.info('num_pos = %d' % args.num_pos)
     pos_pairs = positive_sampling(data, num_pos=args.num_pos)
     logger.info('sampling %d positive samples' % len(pos_pairs))
 
-    # prepare for negative sampling
+    # 负采样准备（句向量编码）
     logger.info('** negative sampling **')
     sents, labels = [], []
     cnt = 0
@@ -253,7 +280,7 @@ def main(args):
                                          algorithm=args.algorithm)
     logger.info('sampling %d negative samples' % len(neg_pairs))
 
-    # visualize
+    # 可视化
     if args.visualized:
         logger.info('** visualize **')
         visualize(vectors,
@@ -269,7 +296,7 @@ def main(args):
         % (len(all_pairs), len(pos_pairs), len(neg_pairs)))
 
     # split & save
-    out_file = f'ddqa_beta{args.hyper_beta}_{args.algorithm}_p{args.num_pos}_n{args.local_num_negs}{args.global_num_negs}.csv'
+    out_file = f'beta{args.hyper_beta}_{args.algorithm}_p{args.num_pos}_n{args.local_num_negs}{args.global_num_negs}.csv'
     df = pd.DataFrame(data=all_pairs,
                       columns=['sentence1', 'sentence2', 'label'])
 
@@ -290,9 +317,12 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('Negative Sampling Via Clustering')
+    parser = argparse.ArgumentParser('Positive & Negative Sampling System')
 
-    parser.add_argument('--filename', default='ddqa/train_faq.json')
+    parser.add_argument(
+        '--filename',
+        default='ddqa/train_faq.json',
+        help='json format original data, like {topic: {post:[], resp:[]}}')
     parser.add_argument(
         '--model_name_or_path',
         default='./output/training-OnlineConstrativeLoss-merge-bert-6L',
@@ -302,33 +332,49 @@ if __name__ == '__main__':
         type=ast.literal_eval,
         default=False,
         help='transformers model or sentence-transformers model')
-    parser.add_argument('--hyper_beta',
-                        type=int,
-                        default=2,
-                        help='hyperparameter')
-    parser.add_argument('--algorithm',
-                        type=str,
-                        default='kmeans',
-                        choices=['kmeans', 'gmm'])
+    parser.add_argument(
+        '--hyper_beta',
+        type=int,
+        default=2,
+        help='hyperparameter (n_clusters = total_topics / hyper_beta)')
     parser.add_argument(
         '--n_clusters',
         type=int,
         default=-1,
         help='if n_clusters=-1, then n_cluster=n_topics/hyper_m')
-    parser.add_argument('--num_pos', type=int, default=5)
-    parser.add_argument('--local_num_negs', type=int, default=3)
-    parser.add_argument('--global_num_negs', type=int, default=2)
-
+    parser.add_argument('--algorithm',
+                        type=str,
+                        default='kmeans',
+                        choices=['kmeans', 'gmm'],
+                        help='cluster algorithm')
+    parser.add_argument('--num_pos',
+                        type=int,
+                        default=5,
+                        help='number of positive sampling')
+    parser.add_argument('--local_num_negs',
+                        type=int,
+                        default=3,
+                        help='number of local negative sampling')
+    parser.add_argument('--global_num_negs',
+                        type=int,
+                        default=2,
+                        help='number of global negative sampling')
     parser.add_argument('--visualized',
                         type=ast.literal_eval,
                         default=False,
                         help='whether to visualize cluster results or not')
-    parser.add_argument('--is_split', type=ast.literal_eval, default=False)
+    parser.add_argument('--is_split',
+                        type=ast.literal_eval,
+                        default=False,
+                        help='whether to split the data into train and test')
     parser.add_argument('--test_size',
                         type=float,
                         default=0.05,
                         help='train/test split size')
-    parser.add_argument('--output_dir', type=str, default='./samples')
+    parser.add_argument('--output_dir',
+                        type=str,
+                        default='./samples',
+                        help='directory to save train/test.csv')
 
     args = parser.parse_args()
     main(args)

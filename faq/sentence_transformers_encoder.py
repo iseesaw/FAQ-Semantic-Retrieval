@@ -4,25 +4,8 @@
 # @Author  : Kaiyan Zhang (minekaiyan@gmail.com)
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
-import json
-import numpy as np
-import pandas as pd
+
 from sentence_transformers import models, SentenceTransformer
-
-
-# Cosine Similarity
-def cos_sim(query_vec, corpus_mat, corpus_norm_mat=None):
-    '''余弦相似度计算
-    
-    :param query_vec: ndarray, (dim_size)
-    :param corpus_mat: ndarray, (num_cands, dim_size)
-    :param corpus_norm_mat: ndarray, (num_cands) 可提前计算加快速度
-    :return: ndarray, (num_cands)
-    '''
-    if not corpus_norm_mat:
-        corpus_norm_mat = np.linalg.norm(corpus_mat)
-    return np.dot(corpus_mat,
-                  query_vec) / (np.linalg.norm(query_vec) * corpus_norm_mat)
 
 
 # Model
@@ -51,12 +34,11 @@ def get_model(model_name_or_path, device='cuda'):
     return model
 
 
-# IO
-def load_json(filename):
-    with open(filename, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-
-def save_json(data, filename):
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+if __name__ == '__main__':
+    # pip install sentence-transformers
+    # https://github.com/UKPLab/sentence-transformers
+    model = get_model('./output/transformers-merge3-bert-6L')
+    # （hidden_size）
+    print(model.encode('你好呀'))
+    # （batch_size, hidden_size）
+    # print(model.encode(['你好呀']))

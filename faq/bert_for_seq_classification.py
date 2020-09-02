@@ -19,18 +19,22 @@ from transformers import BertForSequenceClassification, BertTokenizerFast, Train
 
 class SimDataset(torch.utils.data.Dataset):
     def __init__(self, encodings, labels):
-        """
-        :param encodings
-            Dict(str, List[List[int]])
-        :labels
-            List[int]
+        """Dataset
+
+        Args:
+            encodings (Dict(str, List[List[int]])): after tokenizer
+            labels (List[int]): labels
         """
         self.encodings = encodings
         self.labels = labels
 
     def __getitem__(self, idx):
-        """
-        :return item
+        """next
+
+        Args:
+            idx (int): 
+
+        Returns:
             dict-like object, Dict(str, tensor)
         """
         item = {
@@ -45,9 +49,13 @@ class SimDataset(torch.utils.data.Dataset):
 
 
 def load_dataset(filename):
-    """
-    :param filename
-    :return [texts1, texts2], labels
+    """加载训练集
+
+    Args:
+        filename (str): 文件名
+
+    Returns:
+        
     """
     df = pd.read_csv(filename)
     # array -> list
@@ -56,6 +64,14 @@ def load_dataset(filename):
 
 
 def compute_metrics(pred):
+    """计算指标
+
+    Args:
+        pred (EvalPrediction): pred.label_ids, List[int]; pred.predictions, List[int]
+
+    Returns:
+        Dict(str, float): 指标结果
+    """
     labels = pred.label_ids
     preds = pred.predictions.argmax(-1)
     precision, recall, f1, _ = precision_recall_fscore_support(
@@ -137,7 +153,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser('Bert For Classification')
+    parser = ArgumentParser('Bert For Sequence Classification')
 
     parser.add_argument('--do_train', type=ast.literal_eval, default=False)
     parser.add_argument('--do_eval', type=ast.literal_eval, default=True)

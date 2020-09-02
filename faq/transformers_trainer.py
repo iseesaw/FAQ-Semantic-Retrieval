@@ -138,7 +138,13 @@ class BertForSiameseNet(BertPreTrainedModel):
     def _mean_pooling(self, model_output, attention_mask):
         """Mean Pooling - Take attention mask into account for correct averaging
         :param model_output: Tuple
-        :param attention_mask: Tensor, (batch_size, seq_length)
+        :param attention_mask: 
+
+        Args:
+            model_output (Tuple(Tensor nargs*)): 
+            attention_mask (Tensor): (batch_size, seq_length)
+
+        Returns:
         """
         # embedding_output + attention_hidden_states x 12
         #hidden_states = model_output[2]

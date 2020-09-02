@@ -1,33 +1,32 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @Date    : 2020-08-27 11:46:29
+# @Date    : 2020-08-29 01:51:01
 # @Author  : Kaiyan Zhang (minekaiyan@gmail.com)
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
-
 import torch
 from transformers import AutoTokenizer, AutoModel
 
 
-class EncodeClient:
-    '''封装基于 Transformers 的句向量编码器
-    '''
+class TransformersEncoder:
+    """封装基于Transformers的句向量编码器
+    """
     def __init__(
         self,
         model_name_or_path='/users6/kyzhang/embeddings/bert/bert-base-chinese',
         max_length=128):
-        '''
-        :param model_name_or_path: str, pre-trained model name of path,
-                                which is for loading model from huggingface model repository
-        :param max_length: int, max length of sentences
-        '''
-        print('initing encode client')
-        # Load AutoModel from huggingface model repository
+        """初始化
+
+        Args:
+            model_name_or_path (str, optional): Transformers模型位置或者别称（从HuggingFace服务器下载）
+            max_length (int, optional): 最大长度. Defaults to 128.
+        """
+        print('initing encoder')
         print('loading model from from pretrained')
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         self.model = AutoModel.from_pretrained(model_name_or_path)
 
-        # Using GPU
+        # gpu & cpu
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print('using', self.device)
         self.model.to(self.device) 
@@ -38,7 +37,8 @@ class EncodeClient:
 
 
     def _assign_device(self, Tokenizer_output):
-
+        """将tensor转移到gpu
+        """
         tokens_tensor = Tokenizer_output['input_ids'].to(self.device)
         token_type_ids = Tokenizer_output['token_type_ids'].to(self.device)
         attention_mask = Tokenizer_output['attention_mask'].to(self.device)
@@ -50,14 +50,18 @@ class EncodeClient:
         return output
 
     def _mean_pooling(self, model_output, attention_mask):
-        '''Mean Pooling - Take attention mask into account for correct averaging
-        :param model_output: Tuple
-        :param attention_mask: Tensor, (batch_size, seq_length)
-        '''
+        """平均池化
+
+        Args:
+            model_output ([type]): transformers 模型输出
+            attention_mask (List[List[int]]): MASK, (batch, seq_length)
+
+        Returns:
+            List[List[int]]: 句向量
+        """
         # (batch_size, seq_length, hidden_size)
         token_embeddings = model_output[0].cpu()
 
-        # First element of model_output contains all token embeddings
         # (batch_size, seq_length) => (batch_size, seq_length, hidden_size)
         input_mask_expanded = attention_mask.cpu().unsqueeze(-1).expand(
             token_embeddings.size()).float()
@@ -70,12 +74,15 @@ class EncodeClient:
         sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
         return sum_embeddings / sum_mask
 
-
     def encode(self, sentences):
-        '''
-        :param sentences: List[str], (batch_size)
-        :return: Tensor (batch_size, hidden_size)
-        '''
+        """句向量编码器
+
+        Args:
+            sentences (List[str]): (batch_size)
+
+        Returns:
+            Tensor: (batch_size, hidden_size)
+        """
         # Tokenize sentences
         encoded_input = self.tokenizer(sentences,
                                        padding=True,
@@ -103,3 +110,10 @@ class EncodeClient:
             model_output, encoded_input['attention_mask'])
 
         return sentence_embeddings
+
+if __name__ == '__main__':
+    # pip install transformers==3.0.2 ([Optional] torch==1.6.0)
+    # https://github.com/huggingface/transformers
+    encoder = TransformersEncoder()
+    # (batch_size, hidden_size)
+    print(encoder.encode(['你好呀']))
