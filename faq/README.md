@@ -53,11 +53,12 @@ $$
 | ------------------------------------------------------------ | ---------- | ------------------------------------------------------- | ------------------------------------------------------------ |
 | [bert-as-serivce](https://github.com/hanxiao/bert-as-service) | TensorFlow | 高并发服务调用，支持 fine-tune，较难拓展其他模型        | [getting-started](https://github.com/hanxiao/bert-as-service#getting-started) |
 | [Sentence-Transformers](https://www.sbert.net/index.html)    | PyTorch    | 接口简单易用，支持各种模型调用，支持 fine-turn（单GPU） | [using-Sentence-Transformers-model](https://www.sbert.net/docs/quickstart.html#quickstart)<br />[using-Transformers-model](https://github.com/UKPLab/sentence-transformers/issues/184#issuecomment-607069944) |
-| [Transformers](https://github.com/huggingface/transformers/) | PyTorch    | 自定义程度高，支持各种模型调用，支持 fine-turn（多GPU） | [sentence-embeddings-with-Transformers](https://www.sbert.net/docs/usage/computing_sentence_embeddings.html#sentence-embeddings-with-transformers) |
+| 🤗 [Transformers](https://github.com/huggingface/transformers/) | PyTorch    | 自定义程度高，支持各种模型调用，支持 fine-turn（多GPU） | [sentence-embeddings-with-Transformers](https://www.sbert.net/docs/usage/computing_sentence_embeddings.html#sentence-embeddings-with-transformers) |
 
 > - **Sentence-Transformers** 进行小规模数据的单 GPU fine-tune 实验（尚不支持多 GPU 训练，[Multi-GPU-training #311](https://github.com/UKPLab/sentence-transformers/issues/311#issuecomment-659455875) ；实现了多种 [Ranking loss](https://www.sbert.net/docs/package_reference/losses.html) 可供参考）
 > - **Transformers** 进行大规模数据的多 GPU fine-tune 训练（推荐自定义模型使用 [Trainer](https://huggingface.co/transformers/training.html#trainer) 进行训练）
 > - 实际使用过程中 **Sentence-Transformers** 和 **Transformers** 模型基本互通互用，前者多了 **Pooling 层（Mean/Max/CLS Pooling）** ，可参考 **Example**
+> - :fire: **实际上线推荐直接使用 Transformers 封装，Sentence-Transformers 在 CPU 上运行存在问题！！！** （并且可以少安装一个包。。）
 
 
 
@@ -215,7 +216,7 @@ fine-tune 过程主要进行**文本相似度计算**任务，亦**句对分类�
 #### Flask Web API
 
 - Flask + Gunicorn + gevent + nginx ，进程管理（自启动）（uwsgi 同理，gunicorn 更简单）
-- [werkzeug.contrib.cache](https://werkzeug.palletsprojects.com/en/0.16.x/contrib/cache/) 使用 cache 缓存问题， 注意版本 werkzeug==0.16.0
+- [flask-caching](https://github.com/sh4nks/flask-caching) ，进行问题查询结果缓存
 
 
 
@@ -407,11 +408,48 @@ python locust_test.py
 
 ### Web服务压测
 
-| model                                | rps  |
-| ------------------------------------ | ---- |
-| lucene                               |      |
-| BertForSiameseNetwork<br />12 layers |      |
-| BertForSiameseNetwork<br />6 layers  |      |
+- 运行命令
+
+  > 4核8G服务器，6层小模型占用内存约 700MB
+>
+  > 总共 100 个模拟用户，启动时每秒递增 10 个，压力测试持续 1 分钟
+  
+  ```bash
+  locust  -f locust_test.py  --host=http://127.0.0.1:8889/module --headless -u 100 -r 10 -t 1m
+  ```
+
+
+
+- 压测结果
+
+> 注意，Flask 中使用了 cache，所以遇到重复的句子回复速度将非常快
+
+| model                               | reqs  | \# fails    | Avg   | Min  | Max    | Median | req/s      | failures/s |
+| ----------------------------------- | ----- | ----------- | ----- | ---- | ------ | ------ | ---------- | ---------- |
+| *lucene bm25 (online)* 1000u        | 48969 | 0           | 91    | 3    | 398    | 79     | **271.75** | 0.00       |
+| BertForSiameseNetwork<br />6 layers | 4424  | 654(14.78%) | 28005 | 680  | 161199 | 11000  | 24.55      | 3.63       |
+| *lucene bm25 (online)* 100u         | 4973  | 1           | 32    | 6    | 60077  | 10     | 27.66      | 0.01       |
+| BertForSiameseNetwork<br />6 layers |       |             |       |      |        |        |            |            |
+
+> 老版本服务器上使用 [tensorflow 报错解决方案 Error in `python': double free or corruption (!prev) #6968](https://github.com/tensorflow/tensorflow/issues/6968#issuecomment-279060156)
+
+
+
+- Tesla P100 16G
+
+  > `locust  -f locust_test.py  --host=http://127.0.0.1:8889/module --headless -u 1000 -r 100 -t 3m`
+
+  | model                 | reqs  | fails       | Avg  | Min  | Max    | median | req/s  | failures/s |
+  | --------------------- | ----- | ----------- | ---- | ---- | ------ | ------ | ------ | ---------- |
+  | TransformersEncoder   | 17597 | 0           | 6100 | 3    | 22658  | 5100   | 97.63  | 0          |
+  | bert-as-service u1000 | 27978 | 1807(6.46%) | 2539 | 2    | 127282 | 1200   | 155.26 | 10.03      |
+  | bert-as-service u100  | 5040  | 0           | 11   | 2    | 292    | 11     | 28.01  | 0          |
+
+  ![image-20200903024258644](/Users/kaiyan/Library/Application Support/typora-user-images/image-20200903024258644.png)
+
+  ![image-20200903025751977](/Users/kaiyan/Library/Application Support/typora-user-images/image-20200903025751977.png)
+
+  ![image-20200903031530211](/Users/kaiyan/Library/Application Support/typora-user-images/image-20200903031530211.png)
 
 
 
