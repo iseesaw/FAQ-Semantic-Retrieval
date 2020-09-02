@@ -7,7 +7,6 @@
 import json
 import numpy as np
 import pandas as pd
-from sentence_transformers import models, SentenceTransformer
 
 
 # Cosine Similarity
@@ -23,32 +22,6 @@ def cos_sim(query_vec, corpus_mat, corpus_norm_mat=None):
         corpus_norm_mat = np.linalg.norm(corpus_mat)
     return np.dot(corpus_mat,
                   query_vec) / (np.linalg.norm(query_vec) * corpus_norm_mat)
-
-
-# Model
-def get_model(model_name_or_path, device='cuda'):
-    """初始化 SentenceTransformer 编码器
-
-    Args:
-        model_name_or_path (str): Transformers 或者微调后的 BERT 模型
-        device (str, optional): cpu or cuda. Defaults to 'cuda'.
-
-    Returns:
-        SentenceTransformers: 编码器
-    """
-    word_embedding_model = models.BERT(model_name_or_path)
-
-    # 使用 mean pooling 获得句向量表示
-    pooling_model = models.Pooling(
-        word_embedding_model.get_word_embedding_dimension(),
-        pooling_mode_mean_tokens=True,
-        pooling_mode_cls_token=False,
-        pooling_mode_max_tokens=False)
-
-    model = SentenceTransformer(modules=[word_embedding_model, pooling_model],
-                                device=device)
-
-    return model
 
 
 # IO

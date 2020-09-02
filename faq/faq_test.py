@@ -8,7 +8,9 @@ import time
 import logging
 import numpy as np
 
-from utils import load_json, cos_sim, get_model
+from utils import load_json, cos_sim
+from transformers_encoder import TransformersEncoder
+from bert_serving.client import BertClient
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
@@ -29,7 +31,7 @@ def init_data():
 
 print('start loading')
 faq_data, topics, corpus_mat, corpus_mat_norm = init_data()
-model = get_model('./output/transformers-merge3-bert-6L')
+model = BertClient() #TransformersEncoder('./output/transformers-merge3-bert-6L')
 print('end loading...')
 
 
@@ -37,9 +39,9 @@ def query():
     """输入测试
     """
     while True:
-        enc = model.encode(input('Enter: '))
+        enc = model.encode([input('Enter: ')])
         t1 = time.time()
-        scores = cos_sim(enc, corpus_mat, corpus_mat_norm)
+        scores = cos_sim(np.squeeze(enc, axis=0), corpus_mat, corpus_mat_norm)
         max_index = np.argmax(scores)
 
         topic = topics[max_index]
