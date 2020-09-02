@@ -21,29 +21,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from sentence_transformers import SentenceTransformer, util, models
 
-from utils import load_json, cos_dist, save_json
-from encode_client import EncodeClient
+from transformers import BertTokenizer, BertModel
 
-
-def dis_test():
-    '''BERT embedding 计算相似度
-    '''
-    client = EncodeClient()
-    df = pd.read_csv('lcqmc/LCQMC_dev.csv')
-    sent1_loader = tqdm(DataLoader(df['sentence1'][:3],
-                                   batch_size=1,
-                                   shuffle=False),
-                        desc='Iteration')
-    sent2_loader = DataLoader(df['sentence2'][:3], batch_size=1, shuffle=False)
-
-    cos = nn.CosineSimilarity()
-    for sent1_batch, sent2_batch in zip(sent1_loader, sent2_loader):
-        sent1_enc = client.encode(sent1_batch)
-        sent2_enc = client.encode(sent2_batch)
-        score = cos(torch.tensor(sent1_enc), torch.tensor(sent2_enc)).tolist()
-        print('------')
-        print(sent1_batch, sent2_batch)
-        print(score)
+from utils import load_json, cos_sim, save_json
 
 
 def construct_pos():
@@ -206,10 +186,10 @@ def load_faq(filename='hflqa/faq.json'):
 
 def compute_acc():
     is_transformers = True
-    # model_path = '/users6/kyzhang/embeddings/bert/bert-base-chinese'
+    model_path = '/users6/kyzhang/embeddings/bert/bert-base-chinese'
     # model_path = './output/training-OnlineConstrativeLoss-hflqa-beta1.5-gmm-bert/0_BERT'
     # model_path = './output/transformers-merge-bert-base-chinese'
-    model_path = './output/transformers-merge3-bert/checkpoint-9000'
+    # model_path = './output/transformers-merge3-bert'
     if is_transformers:
         # 使用 BERT 作为 encoder
         word_embedding_model = models.BERT(model_path)
@@ -229,7 +209,7 @@ def compute_acc():
     #                                                     labels,
     #                                                     test_size=0.1)
 
-    proj = 'hflqa'
+    proj = 'ddqa'
     X_train, y_train = load_faq(f'{proj}/train_faq.json')
     X_test, y_test = load_faq(f'{proj}/test_faq.json')
 
@@ -246,6 +226,12 @@ def compute_acc():
 
     print(query_embeddings.shape, corpus_embeddings.shape)
     hits = util.semantic_search(query_embeddings, corpus_embeddings)
+    res = [
+        1 if y in [y_train[hit[i]['corpus_id']] for i in range(10)] else 0
+        for hit, y in zip(hits, y_test)
+    ]
+    acc = sum(res) / len(res)
+    print(acc)
 
     # data = []
     # for x, y, hit in zip(X_test, y_test, hits):
@@ -255,12 +241,7 @@ def compute_acc():
     #         cands.insert(0, x)
     #         data.append(cands)
     # pd.DataFrame(data=data, columns=['query', 'std_q', 'error1', 'error2', 'error3']).to_csv('error_cands.csv', index=None)
-    res = [
-        1 if y in [y_train[hit[i]['corpus_id']] for i in range(10)] else 0
-        for hit, y in zip(hits, y_test)
-    ]
-    acc = sum(res) / len(res)
-    print(acc)
+
     # return acc
     # while True:
     #     inp_question = input("Please enter a question: ")
@@ -335,10 +316,25 @@ def export_ddqa():
     save_json(data, 'ddqa/faq.json')
 
 
+def save_pretrained_model():
+    model_path = './output/transformers-merge3-bert/'
+    model = BertModel.from_pretrained(model_path)
+
+    torch.save(model.state_dict(),
+               'output/transformers-merge3-bert-6L/pytorch_model.bin')
+
+def for_index():
+    train_faq = load_json('hflqa/test_faq.json')
+    faq = load_json('hflqa/faq.json')
+    for topic in train_faq:
+        train_faq[topic]['resp'] = faq[topic]['resp']
+    save_json(train_faq, 'hflqa/test_faq_resp.json')
+
 if __name__ == '__main__':
     # dis_test()
     # sentence_transformers_test()
-    compute_acc()
+    # compute_acc()
+    for_index()
     """scores = []
     for _ in range(5):
         scores.append(compute_acc())
@@ -347,3 +343,4 @@ if __name__ == '__main__':
     # split_faq('ddqa')
     # merge()
     # export_ddqa()
+    # save_pretrained_model()

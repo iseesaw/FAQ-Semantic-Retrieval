@@ -5,15 +5,12 @@
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
 import numpy as np
-from torch.utils.data import DataLoader
-from tqdm import tqdm
 
-from utils import load_json, save_json
-from enc_client import EncodeClient
+from utils import load_json, save_json, get_model
 
 
 def index_query():
-    '''对所有post使用bert进行编码
+    """对所有post使用bert进行编码
     [
         {
             topic: topic_sent,
@@ -22,7 +19,7 @@ def index_query():
         }
     ]
     保存向量矩阵和对应的主题
-    '''
+    """
     data = load_json('hflqa/faq.json')
 
     posts, topics = [], []
@@ -31,14 +28,9 @@ def index_query():
             posts.append(post)
             topics.append(topic)
 
-    client = EncodeClient()
-    dataloader = tqdm(DataLoader(posts, batch_size=128, shuffle=False),
-                      desc='Iteration')
+    encoder = get_model('./output/transformers-merge3-bert-6L')
 
-    encs = []
-    for batch in dataloader:
-        enc = client.encode(batch)
-        encs.extend(enc.tolist())
+    encs = encoder.encode(posts, show_progress_bar=True)
 
     save_json(topics, 'hflqa/topics.json')
 

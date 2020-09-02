@@ -5,6 +5,7 @@
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
 import os
+import ast
 import pprint
 import argparse
 
@@ -13,13 +14,21 @@ import torch
 from torch.utils.data import DataLoader
 
 from sentence_transformers import losses, models
-from sentence_transformers import SentencesDataset, LoggingHandler, SentenceTransformer, evaluation
+from sentence_transformers import SentencesDataset, SentenceTransformer, evaluation
 from sentence_transformers.readers import InputExample
 
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 
 def load_train_samples(filename):
+    """读取训练样本
+
+    Args:
+        filename (str): csv文件，保存格式为 sentence1, sentence2, label
+
+    Returns:
+        List[InputExample]: 训练样本
+    """
     data = pd.read_csv(filename)
     samples = []
     for _, row in data.iterrows():
@@ -30,6 +39,13 @@ def load_train_samples(filename):
 
 
 def load_dev_sentences(filename):
+    """读取测试样本
+
+    Args:
+        filename (str): 文件名
+
+    Returns:
+    """
     data = pd.read_csv(filename)
     sents1, sents2, labels = [], [], []
     for _, row in data.iterrows():
@@ -40,6 +56,13 @@ def load_dev_sentences(filename):
 
 
 def train(args):
+    """使用 Sentence-Transformers 进行文本相似度任务微调
+    Sentence-Transformers 仅支持单GPU训练, 可以进行快速想法验证
+    大规模数据需要使用 Transformers 代码进行多GPU训练
+
+    Args:
+        
+    """
     # 使用 BERT 作为 encoder
     word_embedding_model = models.BERT(args.model_name_or_path)
 
@@ -81,23 +104,28 @@ def train(args):
               evaluator=binary_acc_evaluator,
               epochs=args.num_epochs,
               warmup_steps=args.warmup_steps,
-              output_path=args.model_save_path,
+              output_path=args.output_dir,
               output_path_ignore_not_empty=True)
 
 
 def test(args):
-    model = SentenceTransformer(args.model_save_path, device='cuda')
+    """测试集评估（csv文件）
+
+    Args:
+        
+    """
+    model = SentenceTransformer(args.output_dir, device='cuda')
 
     # 开放集评估
     dev_sentences1, dev_sentences2, dev_labels = load_dev_sentences(
         args.devset_path)
     binary_acc_evaluator = evaluation.BinaryClassificationEvaluator(
         dev_sentences1, dev_sentences2, dev_labels)
-    model.evaluate(binary_acc_evaluator, args.model_save_path)
+    model.evaluate(binary_acc_evaluator, args.output_dir)
 
     # 开发集阈值
     result = pd.read_csv(
-        os.path.join(args.model_save_path,
+        os.path.join(args.output_dir,
                      'binary_classification_evaluation_results.csv'))
     max_idx = result['cosine_acc'].argmax()
     threshold = result['cosine_acc_threshold'].values[max_idx]
@@ -133,18 +161,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Sentence Transformers Training.')
 
-    parser.add_argument('--mode',
-                        type=str,
-                        default='test',
-                        help='train or test')
+    parser.add_argument('--do_train', action='store_true')
+    parser.add_argument('--do_eval', action='store_true')
     parser.add_argument(
         '--model_name_or_path',
         type=str,
-        default=
-        'output/transformers-merge-bert-base-chinese'
-        #'/users6/kyzhang/embeddings/bert/bert-base-chinese'
-        #'/users6/kyzhang/embeddings/distilbert/distilbert-multilingual-nli-stsb-quora-ranking/'
-    )
+        default='/users6/kyzhang/embeddings/bert/bert-base-chinese',
+        help='transformers style bert model')
     parser.add_argument('--trainset_path',
                         type=str,
                         default='samples/merge_train_beta1.5_gmm_p4_n42.csv')
@@ -155,11 +178,23 @@ if __name__ == '__main__':
                         type=str,
                         default='samples/train_beta1.5_gmm_p5_n41.csv')
 
-    parser.add_argument('--num_epochs', type=int, default=5)
-    parser.add_argument('--train_batch_size', type=int, default=128)
-    parser.add_argument('--eval_batch_size', type=int, default=128)
+    parser.add_argument('--num_epochs',
+                        type=int,
+                        default=5,
+                        help='number of training epochs')
+    parser.add_argument('--train_batch_size',
+                        type=int,
+                        default=128,
+                        help='training batch size, 128 for 16G')
+    parser.add_argument('--eval_batch_size',
+                        type=int,
+                        default=128,
+                        help='evaluation batch size')
 
-    parser.add_argument('--warmup_steps', type=int, default=1000)
+    parser.add_argument('--warmup_steps',
+                        type=int,
+                        default=1000,
+                        help='bert style warmup steps')
 
     parser.add_argument(
         '--margin',
@@ -167,13 +202,18 @@ if __name__ == '__main__':
         default=0.5,
         help='Negative pairs should have a distance of at least 0.5')
     parser.add_argument(
-        '--model_save_path',
+        '--output_dir',
         type=str,
         default='output/training-OnlineConstrativeLoss-merge-beta1.5-gmm-bert')
 
     args = parser.parse_args()
 
-    if args.mode == 'train':
+    if args.do_train:
         train(args)
-    elif args.mode == 'test':
+    elif args.do_eval:
         test(args)
+    else:
+        pprint.pprint({
+            'train': 'python sentence_transformers_train.py do_eval',
+            'eval': 'python sentence_transformers_train.py do_train'
+        })

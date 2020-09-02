@@ -4,13 +4,11 @@
 # @Author  : Kaiyan Zhang (minekaiyan@gmail.com)
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
-
 import time
 import logging
 import numpy as np
 
-from utils import load_json, cos_dist
-from enc_client import EncodeClient
+from utils import load_json, cos_sim, get_model
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
@@ -19,9 +17,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def init():
-    '''加载预处理数据
-    '''
+def init_data():
+    """加载数据
+    """
     faq_data = load_json('hflqa/faq.json')
     corpus_mat = np.load('hflqa/corpus_mat.npy')
     topics = load_json('hflqa/topics.json')
@@ -30,18 +28,18 @@ def init():
 
 
 print('start loading')
-faq_data, topics, corpus_mat, corpus_mat_norm = init()
-client = EncodeClient()
+faq_data, topics, corpus_mat, corpus_mat_norm = init_data()
+model = get_model('./output/transformers-merge3-bert-6L')
 print('end loading...')
 
 
 def query():
-    '''测试
-    '''
+    """输入测试
+    """
     while True:
-        enc = client.encode([input('Enter: ')])
+        enc = model.encode(input('Enter: '))
         t1 = time.time()
-        scores = cos_dist(np.squeeze(enc, axis=0), corpus_mat, corpus_mat_norm)
+        scores = cos_sim(enc, corpus_mat, corpus_mat_norm)
         max_index = np.argmax(scores)
 
         topic = topics[max_index]
