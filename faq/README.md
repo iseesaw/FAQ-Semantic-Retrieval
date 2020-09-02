@@ -10,7 +10,7 @@
 
 - [x] 基于 TextBrewer 的模型蒸馏
 
-- [ ] 基于 Flask 和 Locust 的 Web服务以及压力测试
+- [x] 基于 ~~Flask~~ FastAPI 和 Locust 的 Web服务以及压力测试
 
 
 
@@ -410,34 +410,41 @@ python locust_test.py
 
 - 运行命令
 
-  > 4核8G服务器，6层小模型占用内存约 700MB
->
   > 总共 100 个模拟用户，启动时每秒递增 10 个，压力测试持续 1 分钟
-  
+
   ```bash
   locust  -f locust_test.py  --host=http://127.0.0.1:8889/module --headless -u 100 -r 10 -t 1m
   ```
 
 
 
-- 压测结果
+- 4核8G CPU （6层小模型占用内存约 700MB）
 
 > 注意，Flask 中使用了 cache，所以遇到重复的句子回复速度将非常快
 
-| model                               | reqs  | \# fails    | Avg   | Min  | Max    | Median | req/s      | failures/s |
-| ----------------------------------- | ----- | ----------- | ----- | ---- | ------ | ------ | ---------- | ---------- |
-| *lucene bm25 (online)* 1000u        | 48969 | 0           | 91    | 3    | 398    | 79     | **271.75** | 0.00       |
-| BertForSiameseNetwork<br />6 layers | 4424  | 654(14.78%) | 28005 | 680  | 161199 | 11000  | 24.55      | 3.63       |
-| *lucene bm25 (online)* 100u         | 4973  | 1           | 32    | 6    | 60077  | 10     | 27.66      | 0.01       |
-| BertForSiameseNetwork<br />6 layers |       |             |       |      |        |        |            |            |
+| model                                                        | reqs  | \# fails    | Avg   | Min  | Max    | Median | req/s      | failures/s |
+| ------------------------------------------------------------ | ----- | ----------- | ----- | ---- | ------ | ------ | ---------- | ---------- |
+| *lucene bm25 (online)*  flask 1000u                          | 48969 | 0           | 91    | 3    | 398    | 79     | **271.75** | 0.00       |
+| *lucene bm25 (online)*  flask 100u                           | 4973  | 1           | 32    | 6    | 60077  | 10     | **27.66**  | 0.01       |
+| BertForSiameseNetwork<br />6 layers flask 1000u Transformers | 4424  | 654(14.78%) | 28005 | 680  | 161199 | 11000  | 24.55      | 3.63       |
+| :point_up_2: flask 100u bert-as-service                      | 987   | 0           | 13730 | 357  | 17884  | 14000  | 5.49       | 0.00       |
+| :point_up_2: flask ​100u Transformers                         | 1066  | 0           | 12379 | 236  | 17062  | 12000  | 5.93       | 0.00       |
+| :point_up_2: **fastapi** 100u Transformers                   | 4545  | 0           | 271   | 8    | 2136   | 31     | **25.25**  | 0.00       |
+| :point_up_2: **fastapi** 1000u Transformers                  | 23566 | 1725(7.32%) | 3884  | 6    | 127347 | 26     | 130.87     | 9.58       |
 
 > 老版本服务器上使用 [tensorflow 报错解决方案 Error in `python': double free or corruption (!prev) #6968](https://github.com/tensorflow/tensorflow/issues/6968#issuecomment-279060156)
+>
+> 报错 src/tcmalloc.cc:277] Attempt to free invalid pointer 0x7f4685efcd40 Aborted (core dumpe），解决方案，将 bert_as_service import 移到顶部
+>
+> :fire: [FastAPI](https://fastapi.tiangolo.com/) 实在是太快了！！！100用户并发情况下基本能够达到 lucene 的 REQ
 
 
 
 - Tesla P100 16G
 
   > `locust  -f locust_test.py  --host=http://127.0.0.1:8889/module --headless -u 1000 -r 100 -t 3m`
+  >
+  > :fire: 在大内存 GPU 服务器上 bert-as-service 效果较好
 
   | model                 | reqs  | fails       | Avg  | Min  | Max    | median | req/s  | failures/s |
   | --------------------- | ----- | ----------- | ---- | ---- | ------ | ------ | ------ | ---------- |
