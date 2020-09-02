@@ -1,376 +1,93 @@
-# FAQ之基于BERT的语义召回
+# FAQ-Semantic-Retrieval
 
-## 介绍
+![](https://img.shields.io/badge/python-≥3.6-blue?style=for-the-badge&logo=python&link=https://pytorch.org/)![](https://img.shields.io/badge/pytorch-1.6.0-yello?style=for-the-badge&logo=pytorch&link=https://pytorch.org/)![](https://img.shields.io/badge/transformers-≥3.0.2-orange?style=for-the-badge&link=https://huggingface.co/landing/assets/transformers-docs/huggingface_logo.svg)
 
-当用户输入 query 后，FAQ 的处理流程一般为
+一种 FAQ 向量语义检索解决方案
 
-- **问题理解**，对 query 进行改写以及向量表示
+- [x] 基于 Sklearn Kmeans 的负采样
 
-- **召回模块**，在大规模问题集中进行候选问题召回，获得 topk
+- [x] 基于 Transformers 的 BertForSiameseNetwork（Bert双塔模型）微调训练
 
-- **排序模块**，对召回后续问题集合进行排序，然后返回概率最大后续问题对应的答案/回复
+- [x] 基于 TextBrewer 的模型蒸馏
 
-
-
-本文主要讨论 **召回模块**，即获取 topk 后直接返回，主要内容包括：
-
-- **FAQ 召回方法**，包括**基于关键字的倒排索引**（使用 ElasticSearch 或 Lucene 或 Whoosh）；基于**向量检索的语义召回**，使用 BERT 预训练模型表示问题，并使用余弦相似度计算距离（使用 sentence-transformers 或 transformers 实现）
-
-- **BERT 微调与蒸馏**，构造训练数据集，在 BERT 模型基础上 fine-tune，进行模型蒸馏
-
-- **FAQ 线上服务部署**，使用进程管理以及缓存等机制，进行压力测试
+- [ ] 基于 Flask 和 Locust 的 Web服务以及压力测试
 
 
 
-## FAQ 召回方法
+## 项目介绍
 
-> 基于关键字倒排索引和基于向量的语义召回实现思路
+FAQ 的处理流程一般为：
 
-### 关键字检索（倒排索引）
+- 问题理解，对用户 query 进行改写以及向量表示
+- 召回模块，在问题集上进行候选问题召回，获得 topk（基于关键字的倒排索引 vs 基于向量的语义召回）
+- 排序模块，对 topk 进行精排序
 
-计算每个关键字在各文档中的 $TF-IDF$ 以及 $BM25$ 得分，并建立倒排索引表
-
-Python 第三方库 [ElasticSearch](https://whoosh.readthedocs.io/en/latest/index.html)，[Lucene](https://lucene.apache.org/pylucene/)，[Whoosh](https://whoosh.readthedocs.io/en/latest/index.html)
-
-#### TF-IDF
-
-给定文档集合 $\mathcal{D} = \{d_1, d_2, d_3, \cdots, d_n\}$ ，每个文档为 $d_j = \{t_{1}, t_2, \cdots, t_m\}$
-
-- $TF$（Term Frequency）
-
-  - 词频是指一个给定词语在该文档中出现的频率
-
-  - 词频是词数（Term Count）的归一化，防止偏向长文档
-
-  - 对于某一特定文档 $d_j$ 里的词语 $t_i$ ，其在该文档中出现次数为 $n_{i,j}$ ，则有
-    $$
-    TF_{i,j} = \frac{n_{i,j}}{{\sum_k} n_{k,j}}
-    $$
-
-- $IDF$（Inverse Document Frequency）
-
-  - 逆文档频率用于衡量一个词语在所有文档中的重要性
-
-  - 表示越多的文档中出现该词语， 则其重要性越低
-
-  - 词语 $t_i$ 的 $IDF$ 得分如下，其中 $|\{j: t_i \in d_j\}|$ 表示包含词语 $t_i$ 的文档个数
-    $$
-    IDF_{i} = \lg \frac{|D|}{|\{j: t_i \in d_j\}|}
-    $$
-
-- $TF-IDF$
-
-  - 词语 $t_i$ 对于文档 $d_j$ 的重要程度得分为
-
-  $$
-  TF-IDF_{i,j} = TF_{i,j} \times IDF_{i}
-  $$
-  - 特定文档中的高词频，以及该词语在整个文档集合中的低文件频率，可以产生高权重的 TF-IDF 得分
-  - TF-IDF 倾向于过滤常见的词语，保留重要的词语
-  - 计算简单，但是精度不高，且没有体现词语的位置信息
+本项目着眼于 **召回模块** 的 **向量检索** 的实现，适用于 **小规模 FAQ 问题集**（候选问题集<10万）的系统快速搭建
 
 
 
-#### BM25
+### FAQ 语义检索
 
-> [Okapi BM25](https://en.wikipedia.org/wiki/Okapi_BM25)
+传统召回模块**基于关键字检索**
 
-用于搜索相关性评估，设输入 $Query=\{q_1, q_2, \cdots, q_N\}$ ，$BM25$ 思想为计算 $q_i$ 与每个文档 $d$ 的相关性得分，然后将 $Query$ 中所有 $q$ 相对于 $d$ 的相关性得分加权求和，从而得到 $Query$ 与 $d$ 得相关性得分 $BM25(Query, d)$ 
+- 计算关键字在问题集中的 [TF-IDF](https://en.wikipedia.org/wiki/Tf%E2%80%93idf) 以及[ BM25](https://en.wikipedia.org/wiki/Okapi_BM25) 得分，并建立**倒排索引表**
+- 第三方库 [ElasticSearch](https://whoosh.readthedocs.io/en/latest/index.html)，[Lucene](https://lucene.apache.org/pylucene/)，[Whoosh](https://whoosh.readthedocs.io/en/latest/index.html)
+
+
+
+随着语义表示模型的增强、预训练模型的发展，基于 BERT 向量的**语义检索**得到广泛应用
+
+- 对候选问题集合进行向量编码，得到 **corpus 向量矩阵**
+- 当用户输入 query 时，同样进行编码得到 **query 向量表示**
+- 然后进行语义检索（矩阵操作，KNN，FAISS）
+
+
+
+本项目针对小规模 FAQ 问题集直接计算 query 和 corpus 向量矩阵的**余弦相似度**，从而获得 topk 候选问题
 $$
-BM25(Query, d) = \sum_{i=1}^N w_i \times R(q_i, d)
+score = \frac{V_{query} \cdot V_{corpus}}{||V_{query}|| \cdot ||V_{corpus}||}
 $$
+**句向量获取解决方案**
 
-- 其中每个词语的权重 $w_i$ 可以用 $IDF$ 表示（与上述有所不同，进行了平滑等处理）
+| Python Lib                                                   | Framework  | Desc                                                    | Example                                                      |
+| ------------------------------------------------------------ | ---------- | ------------------------------------------------------- | ------------------------------------------------------------ |
+| [bert-as-serivce](https://github.com/hanxiao/bert-as-service) | TensorFlow | 高并发服务调用，支持 fine-tune，较难拓展其他模型        | [getting-started](https://github.com/hanxiao/bert-as-service#getting-started) |
+| [Sentence-Transformers](https://www.sbert.net/index.html)    | PyTorch    | 接口简单易用，支持各种模型调用，支持 fine-turn（单GPU） | [using-Sentence-Transformers-model](https://www.sbert.net/docs/quickstart.html#quickstart)<br />[using-Transformers-model](https://github.com/UKPLab/sentence-transformers/issues/184#issuecomment-607069944) |
+| [Transformers](https://github.com/huggingface/transformers/) | PyTorch    | 自定义程度高，支持各种模型调用，支持 fine-turn（多GPU） | [sentence-embeddings-with-Transformers](https://www.sbert.net/docs/usage/computing_sentence_embeddings.html#sentence-embeddings-with-transformers) |
 
-  $$
-  w_i = IDF(q_i) = \lg \frac{N - n_{q_i} + 0.5}{n_{q_i} + 0.5}
-  $$
+> - **Sentence-Transformers** 进行小规模数据的单 GPU fine-tune 实验（尚不支持多 GPU 训练，[Multi-GPU-training #311](https://github.com/UKPLab/sentence-transformers/issues/311#issuecomment-659455875) ；实现了多种 [Ranking loss](https://www.sbert.net/docs/package_reference/losses.html) 可供参考）
+> - **Transformers** 进行大规模数据的多 GPU fine-tune 训练（推荐自定义模型使用 [Trainer](https://huggingface.co/transformers/training.html#trainer) 进行训练）
+> - 实际使用过程中 **Sentence-Transformers** 和 **Transformers** 模型基本互通互用，前者多了 **Pooling 层（Mean/Max/CLS Pooling）** ，可参考 **Example**
 
-- 而词语对于文档的相关性得分 $R(q_i, d)$ 则为
 
-  $$
-  R(q_i, d) = \frac{f(q_i, d) \times (k_1 + 1)}{f(q_i, d) + k_1 \times (1 - b + b \times \frac{dl}{avgdl})}
-  $$
-  
-  - 其中  $f(q_i, d)$ 为 $q_i$ 在文档 $d$ 中的词频
-  - $k_1, b$ 为可调节参数，通常设置 $k_1 \in [1.2, 2.0] , b = 0.75$ ，$b$ 用于调节文本长度对相关性的影响
-  
-  - $dl,avgdl$ 分别问文档 $d$ 的长度和文档集 $D$ 中所有文档的平均长度
 
+### BERT 微调与蒸馏
 
+在句向量获取中可以直接使用 [bert-base-chinese](https://huggingface.co/bert-base-chinese) 作为编码器，但在特定领域数据上可能需要进一步 fine-tune 来获取更好的效果
 
-### 向量检索（语义召回）
+fine-tune 过程主要进行**文本相似度计算**任务，亦**句对分类任务**；此处是为获得更好的句向量，因此使用**双塔模型（[SiameseNetwork](https://en.wikipedia.org/wiki/Siamese_neural_network) ，孪生网络）**微调，而非常用的基于表示的模型 [BertForSequenceClassification](https://huggingface.co/transformers/model_doc/bert.html#bertforsequenceclassification) 
 
-离线使用 BERT 等预训练模型对候选集合中所有问题进行编码得到 corpus 向量矩阵，当用户输入 query 时，同样进行编码得到向量表示，计算 query 向量和 corpus 向量矩阵的余弦相似度，找回 topk 候选问题
 
-向量表示可以使用如下几种方法
 
-| Python 库                                                    | 特点                                   |
-| ------------------------------------------------------------ | -------------------------------------- |
-| [bert-as-serivce](https://github.com/hanxiao/bert-as-service) | 高并发，自定义程度低，难以扩展其他模型 |
-| [Sentence-Transformers](https://www.sbert.net/index.html)    | 支持多种模型，接口简单易用             |
-| [transformers](https://github.com/huggingface/transformers/) | 支持多种模型，自定义程度高             |
+#### BertForSiameseNetwork
 
+**BertForSiameseNetwork** 主要步骤如下
 
+- **Encoding**，使用（同一个） **BERT** 分别对 query 和 candidate 进行编码
+- **Pooling**，对最后一层进行**池化操作**获得句子表示（Mean/Max/CLS Pooling）
+- **Computing**，计算两个向量的**余弦相似度**（或其他度量函数），计算 loss 进行反向传播
 
-#### Bert-as-service
+![](https://raw.githubusercontent.com/UKPLab/sentence-transformers/master/docs/img/SBERT_Siamese_Network.png)
 
- [bert-as-serivce](https://github.com/hanxiao/bert-as-service) 是基于 Google 官方代码实现的 BERT 服务，可以本地或者HTTP请求进行句子编码
-
-其默认的句向量构造方案是取倒数第二层的隐状态值在token上的均值，即选用的层数是倒数第2层，池化策略是 REDUCE_MEAN
-
-```python
-# 需要运行服务 bert-serving-start -model_dir /tmp/english_L-12_H-768_A-12/ -num_worker=4 
-from bert_serving.client import BertClient
-
-# 创建客户端示例并进行编码
-bc = BertClient()
-bc.encode(['First do it', 'then do it right', 'then do it better'])
-```
-
-通过 HTTP 请求
-
-```python
-# 运行 http 服务 bert-serving-start -model_dir=/YOUR_MODEL -http_port 8125
-import requests
-reply = requests.post('http://127.0.0.1:8125/encode',
-                     data={
-                        "id": 123,
-                        "texts": ["hello world", "good day!"],
-                        "is_tokenized": false
-                    })
-reply.json()
-# {
-#    "id": 123,
-#    "results": [[768 float-list], [768 float-list]],
-#    "status": 200
-# }
-```
-
-
-
-#### Sentence-transformers
-
-> 尽量使用最新版本，否则可能报错
->
-> ```bash
-> torch                              1.6.0
-> sentence-transformers              0.3.4
-> transformers                       3.0.2
-> ```
-
-[Sentence-Transformers](https://www.sbert.net/index.html) 是一个基于 [Transformers](https://huggingface.co/transformers/) 库的句向量表示 Python 框架，内置语义检索以及多种文本（对）相似度损失函数，可以较快的实现模型和语义检索，并提供多种[预训练的模型](https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/)，包括中文在内的多语言模型
-
-- [内置预训练的模型](https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/)
-
-  ```python
-  from sentence_transformers import SentenceTransformer, model
-
-  # 加载内置模型 (https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/)
-  model = SentenceTransformer('distilbert-multilingual-nli-stsb-quora-ranking')
-
-  sentences = ['This framework generates embeddings for each input sentence',
-      'Sentences are passed as a list of string.',
-      'The quick brown fox jumps over the lazy dog.']
-
-  # 句子编码
-  embeddings = model.encode(sentences)
-  ```
-
--  [HuggingFace 的预训练模型](https://huggingface.co/models) 
-
-  > 需要指定特定的类，比如使用 `bert-base-chinese` ，[#issue75](https://github.com/UKPLab/sentence-transformers/issues/75#issuecomment-568717443)
-
-  ```python
-  from sentence_transformers import models
-
-  model_name = 'bert-base-chinese'
-
-  # 使用 BERT 作为 encoder
-  word_embedding_model = models.BERT(model_name)
-
-  # 使用 mean pooling 获得句向量表示
-  pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(),
-  pooling_mode_mean_tokens=True,
-  pooling_mode_cls_token=False,
-  pooling_mode_max_tokens=False)
-
-  model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
-  ```
-
-
-
-#### Transformers
-
-[Transformers](https://huggingface.co/transformers/) 支持多种预训练模型，可扩展性强，预训练模型默认输出 `sequence_output` 和 `pool_output` 分别为句子中每个 token 的向量表示和 [CLS] 的向量表示（相关论文证明 Average Embedding 效果好于 [CLS]）
-
-```python
-from transformers import AutoTokenizer, AutoModel
-import torch
-
-
-# Mean Pooling - Take attention mask into account for correct averaging
-def mean_pooling(model_output, attention_mask):
-    # 获得句子中每个 token 的向量表示
-    token_embeddings = model_output[0] 
-    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-    sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
-    sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
-    return sum_embeddings / sum_mask
-
-
-sentences = ['This framework generates embeddings for each input sentence',
-             'Sentences are passed as a list of string.',
-             'The quick brown fox jumps over the lazy dog.']
-
-# 加载模型文件
-tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-model = AutoModel.from_pretrained("bert-base-uncased")
-
-# 数据预处理
-encoded_input = tokenizer(sentences, padding=True, truncation=True, max_length=128, return_tensors='pt')
-
-# 模型推理
-with torch.no_grad():
-    model_output = model(**encoded_input)
-
-# mean pooling 获得句子表示
-sentence_embeddings = mean_pooling(model_output, encoded_input['attention_mask'])
-```
-
-
-
-## BERT 微调与蒸馏
-
-在使用 transformers 等库获取句向量过程中，我们可以直接使用已有的预训练模型，如 `bert-base-chinese` 等
-
-但是为了在特定领域上获得更好的效果，可能需要在目标数据集上进行微调，同时可以进行模型蒸馏便于部署应用
-
-### 数据集
-
-语义召回本质上是计算输入 query 和候选集中问题的相似度，可以使用已有或者构造文本相似度数据集
-
-- 论文/比赛发布的数据集
-
-相关论文比赛发布的文本相似度数据集可见 [文本相似度数据集](https://github.com/IceFlameWorm/NLP_Datasets) ，大部分为金融等特定领域文本，其中 [LCQMC](http://icrc.hitsz.edu.cn/Article/show/171.html) 提供基于百度知道的约 20w+ 开放域问题数据集，可供模型测试
-
-| data       | total  | positive | negative |
-| ---------- | ------ | -------- | -------- |
-| training   | 238766 | 138574   | 100192   |
-| validation | 8802   | 4402     | 4400     |
-| test       | 12500  | 6250     | 6250     |
-
-除此以外，百度[千言项目](https://www.luge.ai/)发布了[文本相似度评测](https://aistudio.baidu.com/aistudio/competition/detail/45)，包含 LCQMC/BQ Corpus/PAWS-X 等数据集，可供参考
-
-
-
-- 内部数据集
-
-内部给定的 FAQ 数据集形式如下，包括各种”主题/问题“，每种“主题/问题”可以有多种不同表达形式的问题 `post`，同时对应多种形式的回复 `resp` 
-
-检索时只需要将 query 与所有 post 进行相似度计算，从而召回最相似的 post ，然后获取对应的 “主题/问题” 的所有回复 `resp` ，最后随机返回一个回复即可
-
-```python
-{
-   "晚安": {
-       "post": [
-            "10点了，我要睡觉了",
-            "唉，该休息了",
-            "唉不跟你聊了睡觉啦",
-         		...
-        ],
-       "resp": [
-            "祝你做个好梦",
-            "祝你有个好梦，晚安！",
-            "晚安，做个好梦！"
-            ...
-        ]
-     },
-  	"感谢": {
-      	"post": [
-        		"多谢了",
-       		 "非常感谢",
-          ...
-      	],
-      	"resp": [
-        		"助人为乐为快乐之本",
-        		"别客气",
-          	...
-      	]
-    },
-  	...
-}
-```
-
-
-
-### 负采样
-
-对于每个 query，需要获得与其相似的 **positve candidate** 以及不相似的 **negtive candidate**，从而构成正样本和负样本作为模型输入，即 **(query, candidate)**
-
-⚠️ 此处为 **offline negtive sampling**，即在训练前采样构造负样本，区别于 **online negtive sampling**，后者在训练中的每个 batch 内进行动态的负采样（可以通过相关损失函数实现）
-
-两种方法可以根据任务特性进行选择，**online negtive sampling** 对于数据集有一定的要求，需要确保每个 batch 内的 query 是不相似的，但是效率更高
-
-对于 **offline negtive sampling** 主要使用以下两种方法：
-
-- **全局负采样**
-
-  在整个数据集上进行正态分布采样，很难产生高难度的负样本
-
-- **局部负采样**
-
-  首先使用少量人工标注数据预训练的 **BERT 模型**对候选问题集合进行**编码**，然后使用**无监督聚类** ，如 [Kmeans](https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html)，最后在每个 query 所在聚类簇中采样负样本
-
-以上所有数据综合作为最终训练数据
-
-> 可以使用 **LCQMC** 标注的数据进行 BERT 模型预训练，但是 **LCQMC** 数据主要为百度知道问题，与FAQ中日常对话存在一定差异的
->
-> [LCQMC: A Large-scale Chinese Question Matching Corpus](https://www.semanticscholar.org/paper/LCQMC%3A-A-Large-scale-Chinese-Question-Matching-Liu-Chen/549c1a581b61f9ea47afc6f6871845392eaebbc4)
-
-
-
-### 双塔模型
-
-微调训练时使用**基于交互的双塔模型** （也称为 **Siamese Net** ，孪生网络），与语义召回模块获取句向量的形保持一致，主要包括
-
-- **Encoding**，使用 **BERT** 分别对 query 和 candidate 进行编码
-- **Pooling**，将最后一层的**平均词嵌入作为句子表示**（或者 [CLS] 的向量表示，效果存在差别）
-- **Computing**，计算两个向量的**点积**（或 **余弦相似度**）作为最终得分
-
-$$
-BERT_{rep}(q, d) = dot(\frac{1}{L} \sum_{t=1}^{L}{\vec q_i^{last}}, \frac{1}{L} \sum_{i=1}^{L} {\vec c_i^{last}})
-$$
-
-- **双塔模型**如下（其中 $cosine-sim(u,v)$ 也可以是其他的**度量函数**）
-
-<img src="https://raw.githubusercontent.com/UKPLab/sentence-transformers/master/docs/img/SBERT_Siamese_Network.png" alt="SBERT Siamese Network Architecture" style="zoom: 50%;" />
-
-> **基于表示的模型**，即 [BertForSequenceClassification](https://huggingface.co/transformers/model_doc/bert.html#bertforsequenceclassification)，将 query 和 cand 拼接作为 BERT 的输入，然后取最后一层 [CLS] 字段的向量表示输入全连接层进行分类
-> $$
-> BERT_{rel}(q, c) = \vec w \times \vec {qd}_{cls}^{last}
-> $$
-> **基于表示的模型**比基于交互的模型更好，但是速度较慢， 一般用于排序模块
->
-> 此外，也可以使用 [poly-encoder](https://arxiv.org/abs/1905.01969) 在基于表示和交互之间进行折中考虑
-
-
-
-### 损失函数
-
-> 参考博客 [Understanding Ranking Loss, Contrastive Loss, Margin Loss, Triplet Loss, Hinge Loss and all those confusing names](https://gombru.github.io/2019/04/03/ranking_loss/) 
->
-> 同时结合  [SentenceTransformers](https://www.sbert.net/index.html) 中 [Loss API](https://www.sbert.net/docs/package_reference/losses.html) 总结
+#### 损失函数
 
 模型训练使用的损失函数为 **Ranking loss**，不同于CrossEntropy 和 MSE 进行分类和回归任务，**Ranking loss** 目的是预测输入样本对（即上述双塔模型中 $u$ 和 $v$ 之间）之间的相对距离（**度量学习任务**）
-
-
 
 - **Contrastive Loss**
 
   > 来自 LeCun [Dimensionality Reduction by Learning an Invariant Mapping](http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf)
   >
-  > [sentence-transformers 源码](https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/losses/ContrastiveLoss.py)
+  > [sentence-transformers 源码实现](https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/losses/ContrastiveLoss.py)
 
   - 公式形式如下，其中 $u, v$ 为 BERT 编码的向量表示，$y$ 为对应的标签（1 表示正样本，0 表示负样本）， $\tau$ 为超参数
     $$
@@ -385,7 +102,7 @@ $$
 
   - 属于 **online negative sampling** ，与 **Contrastive Loss** 类似
 
-  - 参考 [sentence-transformers 源码](https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/losses/OnlineContrastiveLoss.py) ，在每个 batch 内，选择最难以区分的正例样本和负例样本进行 loss 计算（容易识别的正例和负例样本则忽略）
+  - 参考 [sentence-transformers 源码实现](https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/losses/OnlineContrastiveLoss.py) ，在每个 batch 内，选择最难以区分的正例样本和负例样本进行 loss 计算（容易识别的正例和负例样本则忽略）
 
   - 公式形式如下，如果正样本距离小于 $\tau_1$ 则不处理，如果负样本距离大于 $\tau_0$ 则不处理，实现过程中 $\tau_0, \tau_1$ 可以分别取负/正样本的平均距离值
     $$
@@ -396,254 +113,310 @@ $$
     \end{cases}
     $$
 
-
-
-- **Multiple Negatives Ranking Loss**
-
-  > 来自Google [Efficient Natural Language Response Suggestion for Smart Reply](https://arxiv.org/pdf/1705.00652.pdf)
-  >
-  > [sentence-transformers 源码](https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/losses/MultipleNegativesRankingLoss.py)
-
-  - 属于 **online negative sampling** ，当如果只有正样本（例如只有相似的段落/问答对等）时，训练过程中在每个 batch 内进行负采样
-  - 输入句子对 $(a_1, b_1), (a_2, b_), \cdots, (a_n, b_n)$ ，假设 $(a_i, b_i)$ 是正样本，$(a_i, b_j), i \ne j$  是负样本
-  - 在每个 batch 内，对于 $a_i$ ，其使用所有其他的 $b_j$ 作为负样本，然后优化 negative log-likehood loss
-  - 依赖于负样本之间的距离，如果距离差距小，则效果可能不好
+本项目使用 **OnlineContrastive Loss** ，更多 Ranking loss 信息可参考博客 [Understanding Ranking Loss, Contrastive Loss, Margin Loss, Triplet Loss, Hinge Loss and all those confusing names](https://gombru.github.io/2019/04/03/ranking_loss/) ，以及 SentenceTransformers 中的 [Loss API](https://www.sbert.net/docs/package_reference/losses.html) 以及 PyTorch 中的 [margin_ranking_loss](https://pytorch.org/docs/master/nn.functional.html#margin-ranking-loss)
 
 
 
-- **Cosine Similarity Loss**
+#### 数据集
 
-  - 对于每个样本的 query 和 candidate 之间计算余弦相似度，然后与标准相似度之间计算 MSE 损失
+- **文本相似度数据集**
 
-  - 对于输入的标注相似度（即 label）需要是 float 类型（如果标签为 0 或 1，拟合效果可能欠佳）
+  - 相关论文比赛发布的数据集可见 [文本相似度数据集](https://github.com/IceFlameWorm/NLP_Datasets) ，大部分为金融等特定领域文本，其中 [LCQMC](http://icrc.hitsz.edu.cn/Article/show/171.html) 提供基于百度知道的约 20w+ 开放域问题数据集，可供模型测试
 
-  - 公式形式如下
-    $$
-    L(u, v, y) = (\frac{u \cdot v}{||u||_2 \times ||v||_2} - y)^2
-    $$
+    | data       | total  | positive | negative |
+    | ---------- | ------ | -------- | -------- |
+    | training   | 238766 | 138574   | 100192   |
+    | validation | 8802   | 4402     | 4400     |
+    | test       | 12500  | 6250     | 6250     |
 
+  - 除此以外，百度[千言项目](https://www.luge.ai/)发布了[文本相似度评测](https://aistudio.baidu.com/aistudio/competition/detail/45)，包含 LCQMC/BQ Corpus/PAWS-X 等数据集，可供参考
 
+- **FAQ数据集**
 
-- **Pairwise Max Margin Hinge loss**
+  - 内部给定的 FAQ 数据集形式如下，包括各种”主题/问题“，每种“主题/问题”可以有多种不同表达形式的问题 `post`，同时对应多种形式的回复 `resp` 
 
-  > 知乎搜索系统论文中用到的损失函数
-  >
-  > [Beyond Lexical: A Semantic Retrieval Framework for Textual SearchEngine](http://arxiv.org/abs/2008.03917)
-
-  - 运用 SVM 中 max margin 思想，尽量拉远正负样本之间的间距
-  - 训练过程中在每个 batch 内，度量两个正负样本（pairwise）之间的距离
-  - 公式如下，其中 $p_i$ 和 $p_j$ 分别表示每个 $<query, candidate>$ 的模型计算得分，$y_i$ 和 $y_j$ 表示每个候选问题的标签，$\tau$ 为用于对齐的超参数
-
-  $$
-  \frac{1}{M} \sum_i \sum_{j \ne i} \max (0, \tau - (y_i - y_j) \times (p_i -p_j))
-  $$
-
-
-
-### fine-tune
-
-fine-tune 可以使用高度封装的 [Sentence-Transformers](https://www.sbert.net/index.html)  快速搭建模型，或者使用 [Transformers](https://huggingface.co/transformers/) 更灵活地实现自定义模型
-
-| 框架                                                      | 特点                                                         |
-| --------------------------------------------------------- | ------------------------------------------------------------ |
-| [Sentence-Transformers](https://www.sbert.net/index.html) | 简单易用<br />内置多种 Ranking loss<br />插件式模块使用<br />主要用于句对分类任务<br />不支持多GPU训练 |
-| [Transformers](https://huggingface.co/transformers/)      | 内置多种训练机制<br />包括半精度、分布式训练等<br />自定义程度较高，适合各种任务 |
-
-以下分别介绍代码实现步骤
-
-- [Sentence-Transformers](https://www.sbert.net/index.html) 
-
-  - 可以进行多种任务的 fine-tune，这里可以选择类似的 [Quora Duplicate Questions](https://www.sbert.net/examples/training/quora_duplicate_questions/README.html) 作为参考，即判断两个问题是否相似，标签为 0 和 1
-
-  - 首先需要初始化预训练模型，`model_name` 必须是 Sentece-Transformers [内置的预训练模型](https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/) ，也可以加载 transformers 的模型（与前文一致）
+  - 检索时只需要将 query 与所有 post 进行相似度计算，从而召回最相似的 post ，然后获取对应的 “主题/问题” 的所有回复 `resp` ，最后随机返回一个回复即可
 
     ```python
-    from sentence_transformers import SentenceTransformer, models
-    # 加载内置预训练模型
-    model = SentenceTransformer('model_name')
-    
-    # 可以自定义模块 或 使用 HugginFace Transformers 预训练模型
-    #word_embedding_model = models.Transformer('bert-base-chinese', max_seq_length=256)
-    # 可以选择使用 cls/max/mean 等多种 pooling 方式
-    #pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
-    #model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
+    {
+       "晚安": {
+           "post": [
+                "10点了，我要睡觉了",
+                "唉，该休息了",
+             		...
+            ],
+           "resp": [
+                "祝你做个好梦",
+                "祝你有个好梦，晚安！",
+                ...
+            ]
+         },
+      	"感谢": {
+          	"post": [
+            		"多谢了",
+           		 "非常感谢",
+              ...
+          	],
+          	"resp": [
+            		"助人为乐为快乐之本",
+            		"别客气",
+              	...
+          	]
+        },
+      	...
+    }
     ```
 
-  - 之后创建训练集，通过内置的 InputExample 构建样本
+  - 内部FAQ数据包括两个版本
 
-    ```python
-    from torch.utils.data import DataLoader
-    from sentence_transformers import SentencesDataset
-    from sentence_transformers.readers import InputExample
-    
-    # 每个样本使用 InputExample 进行封装
-    train_samples = [InputExample(texts=['sentence1', 'sentence2'], label=1)]
-    train_dataset = SentencesDataset(train_samples, model=model)
-    train_dataloader = DataLoader(train_dataset,
-                                  shuffle=True,
-                                  batch_size=64)
-    # 使用余弦距离作为度量指标 (cosine_distance = 1-cosine_similarity)
-    distance_metric = losses.SiameseDistanceMetric.COSINE_DISTANCE
-    # 初始化训练损失函数
-    train_loss = losses.OnlineContrastiveLoss(model=model,
-                                              distance_metric=distance_metric,
-                                              margin=0.5)
-    ```
+    - chitchat-faq-small，主要是小规模闲聊FAQ，1500主题问题（topic）、2万多不同形式问题（post）
+    - entity-faq-large，主要是大规模实体FAQ（涉及业务问题），大约3-5千主题问题（topic）、12万不同形式问题（post）
 
-  - 然后可以针对具体任务评估器
 
-    - 简单的分类，给定 (sentence1, sentence2) 通过计算两个句向量的余弦相似度判断是否相似，如果高于某个阈值则判断为相似（源码对开发集结果进行排序，依次取两个相邻得分结果作为阈值，遍历查找最高的 f1 值作为结果）
 
-    ```python
-    from sentence_transformers import evaluation
-    from sentence_transformer import losses
-    
-    dev_sents1, dev_sents2, dev_labels = ['sent1', 'sent2'], ['sent11', 'sent22'], [1, 0]
-    binary_acc_evaluator = evaluation.BinaryClassificationEvaluator(
-            dev_sentences1, dev_sentences2, dev_labels)
-    ```
+#### 负采样
 
-    - 还可以构建多种评估器，使用 `evaluation.SequentialEvaluator()` 依次进行评估，参考 [training_OnlineConstrativeLoss.py ](https://github.com/UKPLab/sentence-transformers/blob/master/examples/training/quora_duplicate_questions/training_OnlineConstrativeLoss.py) 同时进行分类以及检索等评估
+对于每个 query，需要获得与其相似的 **positve candidate** 以及不相似的 **negtive candidate**，从而构成正样本和负样本作为模型输入，即 **(query, candidate)**
 
-  - 最后进行模型训练
-
-    ```python
-    model.fit(train_objectives=[(train_dataloader, train_loss)],
-              evaluator=binary_acc_evaluator,
-              epochs=10,
-              warmup_steps=1000,
-              output_path='output',
-              output_path_ignore_not_empty=True)
-    ```
-
-> 高度封装，训练流程和 sklearn 以及 keras 类似，简单容易理解
+> ⚠️ 此处为 **offline negtive sampling**，即在训练前采样构造负样本，区别于 **online negtive sampling**，后者在训练中的每个 batch 内进行动态的负采样（可以通过相关损失函数实现，如 **OnlineContrastive Loss**）
 >
-> 不支持多GPU训练，[Multi-GPU-training #311](https://github.com/UKPLab/sentence-transformers/issues/311#issuecomment-659455875)
->
-> 更多例子参考 [sentence-transformers/examples](https://github.com/UKPLab/sentence-transformers/tree/master/examples)
+> 两种方法可以根据任务特性进行选择，**online negtive sampling** 对于数据集有一定的要求，需要确保每个 batch 内的 query 是不相似的，但是效率更高
+
+对于 **offline negtive sampling** 主要使用以下两种方式采样：
+
+- **全局负采样**
+  - 在整个数据集上进行正态分布采样，很难产生高难度的负样本
+- **局部负采样**
+  - 首先使用少量人工标注数据预训练的 **BERT 模型**对候选问题集合进行**编码**
+  - 然后使用**无监督聚类** ，如 [Kmeans](https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html) 
+  - 最后在每个 query 所在聚类簇中进行采样
 
 
 
-- [Transformers](https://huggingface.co/transformers/)
+实验中对已有 FAQ 数据集中所有主题的 post 进行 **9:1** 划分得到训练集和测试集，负采样结果对比
 
-  - 除了使用 [SentenceTransformers](https://www.sbert.net/index.html) ，也可以直接使用 [Transformers](https://huggingface.co/transformers/) 的 [Trainer](https://huggingface.co/transformers/main_classes/trainer.html) 接口进行快速模型训练
-  - [Trainer](https://huggingface.co/transformers/main_classes/trainer.html) 基本用法参考 [Training and fine-tuning](https://huggingface.co/transformers/training.html#trainer) ，内部封装 PyTorch 训练/预测基本流程，只需要确定 model 和 Dataset 即可
-  - 为了实现基于 BERT 的 SiameseNetwork，需要自定义 Model 以及 Dataset，具体步骤如下
-    - 读取所有句对样本保存 `List[InputExample]` ，`InputExample` 包含句对信息
-    - 初始化 `SiameseDataset(examples, tokenizer)` ，实现 `__getitem__` 方法（进行分词等操作，返回为 token id 序列）
-    - 实现 `collate_fn` 函数，用于 `DataLoader` 回调，对于每个 batch 的数据进行处理（分别对 batch 内所有 sentence1 和 sentence2 进行补齐， 并准备 `BertForSiameseNetwork` 模型输入的特征）
-    - 实现 `BertForSiameseNetwork` ，继承 `BertPreTrainedModel` ，使用 `BertModel` 作为 encoder；实现 `forward` 函数，自定义输入特征参数，使用 encoder 分别编码获得 sentence1和 sentence2 的句向量，计算余弦相似度作为 loss 返回
-    - 实现 `compute_metrics` ，进行指标计算
-    - 初始化 `Trainer` 实例，传入 model，dataset，collate_fn 以及 compute_metrics
+| dataset                       | topics | posts | positive(sampling) | negative(sampling) | total(sampling) |
+| ----------------------------- | ------ | ----- | ------------------ | ------------------ | --------------- |
+| chitchat-faq-small<br />train | 1468   | 18267 | 5w+                | 5w+                | 10w+            |
+| chitchat-faq-small<br />test  | 768    | 2030  | 2984               | 7148               | 10132           |
+| chitchat-faq-small            | 1500   | 20297 | -                  | -                  | -               |
+| entity-faq-large              | -      | 12w+  | 50w+               | 50w+               | 100w+           |
 
 
 
+#### 模型蒸馏
 
-### 模型蒸馏
-
- [TextBrewer](https://github.com/airaria/TextBrewer) 基于 Transformers 的模型蒸馏工具，[官方 入门示例](https://github.com/airaria/TextBrewer/tree/master/examples/random_tokens_example) ，[官方 cmrc2018示例](https://github.com/airaria/TextBrewer/tree/master/examples/cmrc2018_example)
-
-使用上述 transformers Trainer 中实现的 `BertForSiameseNet` ，`SiameseDataset` 等自定义类
-
-主要步骤：
-
-- 读取 teacher 和 student 的配置文件（student 配置文件可以直接修改 teacher 中的 `num_hidden_layer`）
-
-- 构建 `SiameseDataset` 数据集，调用 `Collator.batching_collate` 函数并初始化 `DataLoader` （`Trainer` 中内部完成初始化，`TextBrewer` 需要直接传入）
-
-- 创建 teacher 和 student 的 `BertForSiameseNet` 模型，并加载预训练参数（teacher 模型设置为 `eval` 模式， 即训练过程中参数不改变， 只提供中间层和输出层状态给 student 参考 ）
-
-- 创建 optimizer 以及 TrainingConfig 和 DistillationConfig （以及 `intermediate_matches` ，即 teacher 和 student 中间层的映射方法）
-
-- 创建 `Adaptor`，用于解释 `BertForSiamesNet` 的输出，用于后续映射计算
-
-  > 根据 `intermediate_matches` ，模型需要输出 hidden_states
-  >
-  > 然后 `BertForSiameseNet` 中每个句子都有 hidden_states，目前解决方法时直接选择第一个句子的返回
-
-- 创建 `GeneralDistiller`
-
-- 创建评估回调函数 `predict` ，可以直接使用之前的 `compute_metrics` 计算各指标
+使用基于 Transformers 的模型蒸馏工具 [TextBrewer](https://github.com/airaria/TextBrewer) ，参考 [官方 入门示例](https://github.com/airaria/TextBrewer/tree/master/examples/random_tokens_example) 和[cmrc2018示例](https://github.com/airaria/TextBrewer/tree/master/examples/cmrc2018_example)
 
 
 
-### 实验结果
+### FAQ Web服务
 
-- [ ] 基于 bert-base-chinese 跑 hflqa(samples/train/test.csv) 数据，:running:
-- [ ] 基于 bert-base-chinese 跑 hflqa+lcqmc (samples/merge_train/test.csv) 数据，:running:
-- [ ] 蒸馏上述模型到 6层 bert，+ ddqa.csv
-- [ ] 直接使用 6层 bert + 上述数据
-
-- [ ] 
-- [ ] 获得通用领域 6-layers BERT 句向量编码器
-
-| model/pretrained<br/>dataset/layers                          | lcqmc<br/>acc | lcqmc<br/>f1  | hflqa<br/>acc | hflqa<br/>f1 | hflqa<br/>hit@1   | ddqa<br/>hit@1    |
-| ------------------------------------------------------------ | ------------- | ------------- | :------------ | ------------ | ----------------- | ----------------- |
-| *bert-base-chinese*                                          | -             | -             | -             | -            | 0.7394            | -                 |
-| *6 layers from above* :point_up_2:                           | -             | -             | -             | -            | 0.7276            | -                 |
-| *6 layers from above* :point_up_2:<br/>:steam_locomotive: ​merge dataset | 0.8789/0.8664 | 0.8799/0.8660 | 0.9100        | 0.8920       | 0.8463            | -                 |
-| sentence-transformers<br/>(bert-base-chinese)<br/>:steam_locomotive: ​lcqmc dataset | 0.8890/0.8796 | 0.8898/0.8794 | 0.7333        | 0.5212       | 0.8350            | -                 |
-| *model from above* :point_up_2: <br/>:steam_locomotive: ​hflqa data | -             | -             | -             | -            | 0.8562            | -                 |
-| 🤗 transformers<br />BertForSiameseNet<br/>(bert-base-chinese)<br/>:steam_locomotive: ​lcqmc dataset | 0.8818/0.8705 | 0.8810/0.8701 | 0.7333        | 0.5212       | 0.8177            | -                 |
-| *model from above* :point_up_2: <br />:steam_locomotive: merge dataset | 0.8848/0.8751 | 0.8837/0.8749 | 0.9225        | 0.9053       | 0.8567            | 0.8500            |
-| *6 layers from above* :point_up_2:                           | 0.6791/0.7417 | 0.6584/0.7403 | 0.7913        | 0.7429       | 0.7975            |                   |
-| 🤗 transformers<br/>BertForSeqClassify<br/> (bert-base-chinese)<br/>:steam_locomotive: ​lcqmc dataset | 0.8832/0.8600 | 0.8848/0.8706 | -             | -            | -                 | -                 |
-| 🤗 transformers + textbrewer<br/>BertForSiameseNet<br/>distillation-L6<br/>:steam_locomotive: ​merge dataset + ddqa |               |               |               |              |                   |                   |
-| 🤗 transformers<br />BertForSiameseNet<br/>:steam_locomotive: merge3(l<br/>cqmc+hflqa+ddqa) |               |               |               |              |                   |                   |
-| checkpoint-3000<br/>12 vs 6-layers:point_up_2:               | -             | -             | -             | -            | 0.8980<br/>0.9128 | 0.9961<br/>0.8201 |
-
-> 内部 hflqa 数据集（posts）按9:1拆分，acc 和 f1 为问题对形式测试集（根据阈值分类），hit@1 为检索测试集（真实场景）
->
-> | dataset     | topics | posts | positive(sampling) | negative(sampling) | total(sampling) |
-> | ----------- | ------ | ----- | ------------------ | ------------------ | --------------- |
-> | hflqa-train | 1468   | 18267 | 5w+                | 5w+                | 10w+            |
-> | hflqa-test  | 768    | 2030  | 2984               | 7148               | 10132           |
-> | hflqa-total | 1500   | 20297 | -                  | -                  | -               |
-> | lcqmc       | -      | -     | -                  | -                  | 24w+            |
-> | ddqa        | -      | 12w+  | 50w+               | 50w+               | 100w+           |
-> | merge3      | -      | -     | -                  | -                  | 134w+           |
-
-关于采样的几个结果
-
-- 聚类结果越少，负例越简单，可以用原始主题数/类别数 除以5
-- gmm 和 kmeans 差别不是很大
-
-关于 hflqa 召回结果
-
-- hflqa + lcqmc
-  - 2000 hflqa 测试集 hit@1 大约 85% 左右
-  - 错误原因主要是 hflqa 数据问题
-    - 存在意思相同的 topic，自动评测无法区分，认定为失败（实际是正确的）
-    - 一些不常用表达或者表达不完整的句子
-    - 正常对话的召回率较高
-
-- hflqa + lcqmc + ddqa
-  - 2000 hflqa 测试集，6层比12层效果好一个点，hit@1 约 90%
-  - 10000 ddqa 测试集，12层 hit@1 达到 99%，6层只有 82%
-  - 前面的层学到了较为
-
-
-
-## FAQ Web服务搭建
-
-### Flask 搭建WebAPI
+#### Flask Web API
 
 - Flask + Gunicorn + gevent + nginx ，进程管理（自启动）（uwsgi 同理，gunicorn 更简单）
--  [werkzeug.contrib.cache](https://werkzeug.palletsprojects.com/en/0.16.x/contrib/cache/)  使用 cache 缓存问题， 注意版本 werkzeug==0.16.0
+- [werkzeug.contrib.cache](https://werkzeug.palletsprojects.com/en/0.16.x/contrib/cache/) 使用 cache 缓存问题， 注意版本 werkzeug==0.16.0
 
 
 
-### Locust 压力测试
+#### Locust 压力测试
 
 使用 [Locust](https://locust.io/) 编写压力测试脚本
 
 
 
+## 使用说明
+
+主要依赖参考 `requirements.txt`
+
+```bash
+pip install -r requirements.txt
+```
+
+
+
+### 负采样
+
+```bash
+python sampling.py \
+	--filename='faq/train_faq.json' \
+	--model_name_or_path='./model/bert-base-chinese' \
+	--is_transformers=True \
+	--hyper_beta=2 \
+	--num_pos=5 \
+	--local_num_negs=3 \
+	--global_num_negs=2 \
+	--output_dir='./samples'
+```
+
+**主要参数说明**
+
+- `--filename` ，**faq 数据集**，按前文所述组织为 `{topic: {post:[], resp:[]}}` 格式
+- `--model_name_or_path` ，用于句向量编码的 Transformers **预训练模型**位置（`bert-base-chinese` 或者基于人工标注数据微调后的模型）
+- `--hyper_beta` ，**聚类数超参数**，聚类类别为 `n_cluster=num_topics/hyper_beta` ，其中 `num_topics` 为上述数据中的主题数，`hyper_beta` 默认为 2（过小可能无法采样到足够局部负样本）
+- `--num_pos` ，**正采样个数**，默认 5（注意正负比例应为 1:1）
+- `--local_num_negs` ，**局部负采样个数**，默认 3（该值太大时，可能没有那么多局部负样本，需要适当调低正采样个数，保证正负比例为 1:1）
+- `--global_num_negs` ，**全局负采样个数**，默认 2
+- `--is_split` ，是否进行训练集拆分，默认 False（建议直接在 faq 数据上进行拆分，然后使用评估语义召回效果）
+- `--test_size` ，测试集比例，默认 0.1
+- `--output_dir` ，采样结果文件保存位置（`sentence1, sentence2, label` 形式的 csv 文件）
+
+
+
+### BERT 微调
+
+- 参考[ Sentence-Transformers 的 **raining_OnlineConstrativeLoss.py** ](https://github.com/UKPLab/sentence-transformers/blob/master/examples/training/quora_duplicate_questions/training_OnlineConstrativeLoss.py) 修改，适合单 GPU 小规模样本训练
+
+  - 模型训练
+  
+    ```bash
+    CUDA_VISIBLE_DEVICES=0 python sentence_transformers_train.py \
+      --do_train \
+      --model_name_or_path='./model/bert-base-chinese' \
+      --trainset_path='./lcqmc/LCQMC_train.csv' \
+      --devset_path='./lcqmc/LCQMC_dev.csv' \
+      --testset_path='./lcqmc/LCQMC_test.csv' \
+      --train_batch_size=128 \
+      --eval_batch_size=128 \
+      --model_save_path
+    ```
+  
+  - 主要参数说明
+  
+    - 模型预测时则使用 `--do_eval`
+    - 数据集为 `sentence1, sentence2, label` 形式的 csv 文件
+    - 16G 显存设置 batch size 为 128
+
+
+
+- 使用 [Transformers](https://huggingface.co/transformers/) 自定义数据集和 `BertForSiameseNetwork` 模型并使用 Trainer 训练，适合多 GPU 大规模样本训练
+
+  ```bash
+  CUDA_VISIBLE_DEVICES=0,1,2,3 python transformers_trainer.py \
+  	--do_train=True \
+  	--do_eval=True \
+  	--do_predict=False \
+  	--model_name_or_path='./model/bert-base-chinese' \
+  	--trainset_path='./samples/merge.csv' \
+  	--devset_path='./samples/test.csv' \
+  	--testset_path='./samples/test.csv' \
+  	--output_dir='./output/transformers-merge-bert'
+  ```
+
+  
+
+- 使用 [Transformers](https://huggingface.co/transformers/) 的 `BertForSequenceClassification` 进行句对分类对比实验
+
+  ```bash
+  CUDA_VISIBLE_DEVICES=0 python bert_for_seq_classification.py \
+  	--do_train=True \
+  	--do_eval=True \
+  	--do_predict=False \
+    --trainset_path='./lcqmc/LCQMC_train.csv' \
+    --devset_path='./lcqmc/LCQMC_dev.csv' \
+    --testset_path='./lcqmc/LCQMC_test.csv' \
+    --output_dir='./output/transformers-bert-for-seq-classify'
+  ```
+
+
+
+### 模型蒸馏
+
+使用 [TextBrewer](https://github.com/airaria/TextBrewer)  以及前文自定义的 `SiameseNetwork` 进行模型蒸馏
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python model_distillation.py \
+	--teacher_model='./output/transformers-merge-bert' \
+	--student_config='./distills/bert_config_L3.json' \
+	--bert_model='./model/bert-base-chinese' \
+	--train_file='./samples/train.csv' \
+	--test_file='./samples/test.csv' \
+	--output_dir='./distills/outputs/bert-L3'
+```
+
+主要参数说明：
+
+- 此处使用的 `bert_config_L3.json` 作为学生模型参数，更多参数 [student_config](https://github.com/airaria/TextBrewer/tree/master/examples/student_config/bert_base_cased_config) 或者自定义
+- 3层应用于特定任务效果不错，但对于句向量获取，至少得蒸馏 6层
+- 学生模型可以使用 `bert-base-chinese` 的前几层初始化
+
+
+
+### Web服务
+
+- 服务启动
+
+```bash
+gunicorn -w 1 -b 127.0.0.1:8888 faq_app:app
+```
+
+
+
+- 压力测试
+
+```bash
+python locust_test.py
+```
+
+
+
+## 结果及分析
+
+### 微调结果
+
+> 对于SiameseNetwork，需要在开发集上确定最佳阈值，然后测试集上使用该阈值进行句对相似度结果评价
+
+句对测试集评价结果，此处为 LCQMC 的实验结果
+
+| model                                            | acc(dev/test) | f1(dev/test)  |
+| ------------------------------------------------ | ------------- | ------------- |
+| BertForSeqClassify<br />:steam_locomotive: lcqmc | 0.8832/0.8600 | 0.8848/0.8706 |
+| SiameseNetwork<br />:steam_locomotive: lcqmc     | 0.8818/0.8705 | 0.8810/0.8701 |
+
+> 基于表示和基于交互的模型效果差别并不大
+
+
+
+### 语义召回结果
+
+> 此处为 FAQ 数据集的召回结果评估，将训练集 post 作为 corpus，测试集 post 作为 query 进行相似度计算
+
+| model                                                        | hit@1(chitchat-faq-small) | hit@1(entity-faq-large) |
+| ------------------------------------------------------------ | ------------------------- | ----------------------- |
+| *lucene bm25 (online)*                                       | 0.6679                    | -                       |
+| bert-base-chinese                                            | 0.7394                    | 0.7745                  |
+| bert-base-chinese<br />:point_up_2: *6 layers*               | 0.7276                    | -                       |
+| SiameseNetwork<br />:steam_locomotive: chit-faq-small        | 0.8567                    | 0.8500                  |
+| SiameseNetwork<br />:steam_locomotive: chitchat-faq-small + entity-faq-large | 0.8980                    | **0.9961**              |
+| :point_up_2: *6 layers*                                      | **0.9128**                | 0.8201                  |
+
+- **chitchat-faq-small**
+  - 测试集 hit@1 大约 85% 左右
+  - 错误原因主要是 hflqa 数据问题
+    - 存在意思相同的 topic，自动评测无法区分，认定为失败（实际是正确的）
+    - 一些不常用表达或者表达不完整的句子
+    - 正常对话的召回率较高
+- chitchat-faq-small + entity-faq-large
+  - 2000 chitchat-faq-small 测试集，6层比12层效果好一个点，hit@1 约 90%
+  - 10000 entity-faq-large 测试集，12层 hit@1 达到 99%，6层只有 82%
+  - 底层学到了较为基础的特征，在偏向闲聊的 chitchat-faq-small 上仅使用6层效果超过12层（没有蒸馏必要）
+  - 高层学到了较为高级的特征，在偏向实体的 entity-faq-large 上12层效果远超于6层
+  - 另外，entity-faq-large 数量规模远大于 chitchat-faq-small ，因此最后几层分类器偏向于从 entity-faq-large 学到的信息，因此在 chitchat-faq-small 小效果略有下降；同时能够避免 chitchat-faq-small 数据过拟合
+
+
+
+### Web服务压测
+
+| model                                | rps  |
+| ------------------------------------ | ---- |
+| lucene                               |      |
+| BertForSiameseNetwork<br />12 layers |      |
+| BertForSiameseNetwork<br />6 layers  |      |
+
+
+
 ## 更多
 
-- 本文适用于小规模数据（小于10w？），对于更大规模的检索可以参考 [facebookresearch/faiss](3https://github.com/facebookresearch/faiss) （建立向量索引，然后使用 k-nearest- neighbor 进行召回）
-
-- 很多场景下，基于关键字的倒排索引召回结果已经足够，可以考虑综合基于关键字和基于向量的召回方法，参考 [Query 理解和语义召回在知乎搜索中的应用](https://www.6aiq.com/article/1577969687897)
-
-
+- 大规模问题集可以使用 [facebookresearch/faiss](https://github.com/facebookresearch/faiss) （建立向量索引，使用 k-nearest-neighbor 召回）
+- 很多场景下，基于关键字的倒排索引召回结果已经足够，可以考虑综合基于关键字和基于向量的召回方法，参考知乎语义检索系统 [Beyond Lexical: A Semantic Retrieval Framework for Textual SearchEngine](http://arxiv.org/abs/2008.03917)
 
