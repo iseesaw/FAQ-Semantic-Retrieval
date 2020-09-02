@@ -104,7 +104,7 @@ def train(args):
               evaluator=binary_acc_evaluator,
               epochs=args.num_epochs,
               warmup_steps=args.warmup_steps,
-              output_path=args.model_save_path,
+              output_path=args.output_dir,
               output_path_ignore_not_empty=True)
 
 
@@ -114,18 +114,18 @@ def test(args):
     Args:
         
     """
-    model = SentenceTransformer(args.model_save_path, device='cuda')
+    model = SentenceTransformer(args.output_dir, device='cuda')
 
     # 开放集评估
     dev_sentences1, dev_sentences2, dev_labels = load_dev_sentences(
         args.devset_path)
     binary_acc_evaluator = evaluation.BinaryClassificationEvaluator(
         dev_sentences1, dev_sentences2, dev_labels)
-    model.evaluate(binary_acc_evaluator, args.model_save_path)
+    model.evaluate(binary_acc_evaluator, args.output_dir)
 
     # 开发集阈值
     result = pd.read_csv(
-        os.path.join(args.model_save_path,
+        os.path.join(args.output_dir,
                      'binary_classification_evaluation_results.csv'))
     max_idx = result['cosine_acc'].argmax()
     threshold = result['cosine_acc_threshold'].values[max_idx]
@@ -202,7 +202,7 @@ if __name__ == '__main__':
         default=0.5,
         help='Negative pairs should have a distance of at least 0.5')
     parser.add_argument(
-        '--model_save_path',
+        '--output_dir',
         type=str,
         default='output/training-OnlineConstrativeLoss-merge-beta1.5-gmm-bert')
 

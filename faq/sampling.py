@@ -207,21 +207,18 @@ def encode(sentences, model_name_or_path, is_transformers):
     Returns:
         vectors (List[List[int]]): 句向量
     """
-    if is_transformers:
-        # 使用 BERT 作为 encoder, 并加载预训练模型
-        word_embedding_model = models.BERT(model_name_or_path)
+    # 使用 BERT 作为 encoder, 并加载预训练模型
+    word_embedding_model = models.BERT(model_name_or_path)
 
-        # 使用 mean pooling 获得句向量表示
-        pooling_model = models.Pooling(
-            word_embedding_model.get_word_embedding_dimension(),
-            pooling_mode_mean_tokens=True,
-            pooling_mode_cls_token=False,
-            pooling_mode_max_tokens=False)
+    # 使用 mean pooling 获得句向量表示
+    pooling_model = models.Pooling(
+        word_embedding_model.get_word_embedding_dimension(),
+        pooling_mode_mean_tokens=True,
+        pooling_mode_cls_token=False,
+        pooling_mode_max_tokens=False)
 
-        model = SentenceTransformer(
-            modules=[word_embedding_model, pooling_model])
-    else:
-        model = SentenceTransformer(model_name_or_path)
+    model = SentenceTransformer(
+        modules=[word_embedding_model, pooling_model])
 
     vectors = model.encode(sentences, show_progress_bar=True, device='cuda')
 
@@ -328,11 +325,6 @@ if __name__ == '__main__':
         default='./output/training-OnlineConstrativeLoss-merge-bert-6L',
         help='path of pretrained model which is used to get sentence vector')
     parser.add_argument(
-        '--is_transformers',
-        type=ast.literal_eval,
-        default=False,
-        help='transformers model or sentence-transformers model')
-    parser.add_argument(
         '--hyper_beta',
         type=int,
         default=2,
@@ -369,7 +361,7 @@ if __name__ == '__main__':
                         help='whether to split the data into train and test')
     parser.add_argument('--test_size',
                         type=float,
-                        default=0.05,
+                        default=0.1,
                         help='train/test split size')
     parser.add_argument('--output_dir',
                         type=str,

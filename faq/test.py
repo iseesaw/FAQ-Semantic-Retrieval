@@ -24,28 +24,6 @@ from sentence_transformers import SentenceTransformer, util, models
 from transformers import BertTokenizer, BertModel
 
 from utils import load_json, cos_sim, save_json
-from encode_client import EncodeClient
-
-
-def dis_test():
-    '''BERT embedding 计算相似度
-    '''
-    client = EncodeClient()
-    df = pd.read_csv('lcqmc/LCQMC_dev.csv')
-    sent1_loader = tqdm(DataLoader(df['sentence1'][:3],
-                                   batch_size=1,
-                                   shuffle=False),
-                        desc='Iteration')
-    sent2_loader = DataLoader(df['sentence2'][:3], batch_size=1, shuffle=False)
-
-    cos = nn.CosineSimilarity()
-    for sent1_batch, sent2_batch in zip(sent1_loader, sent2_loader):
-        sent1_enc = client.encode(sent1_batch)
-        sent2_enc = client.encode(sent2_batch)
-        score = cos(torch.tensor(sent1_enc), torch.tensor(sent2_enc)).tolist()
-        print('------')
-        print(sent1_batch, sent2_batch)
-        print(score)
 
 
 def construct_pos():
@@ -345,11 +323,18 @@ def save_pretrained_model():
     torch.save(model.state_dict(),
                'output/transformers-merge3-bert-6L/pytorch_model.bin')
 
+def for_index():
+    train_faq = load_json('hflqa/test_faq.json')
+    faq = load_json('hflqa/faq.json')
+    for topic in train_faq:
+        train_faq[topic]['resp'] = faq[topic]['resp']
+    save_json(train_faq, 'hflqa/test_faq_resp.json')
 
 if __name__ == '__main__':
     # dis_test()
     # sentence_transformers_test()
-    compute_acc()
+    # compute_acc()
+    for_index()
     """scores = []
     for _ in range(5):
         scores.append(compute_acc())
