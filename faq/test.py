@@ -24,7 +24,7 @@ from sentence_transformers import SentenceTransformer, util, models
 from transformers import BertTokenizer, BertModel
 
 from utils import load_json, cos_sim, save_json
-
+from bert_serving.client import BertConfig
 
 def construct_pos():
     '''根据faq数据构造正例
@@ -334,7 +334,7 @@ if __name__ == '__main__':
     # dis_test()
     # sentence_transformers_test()
     # compute_acc()
-    for_index()
+    # for_index()
     """scores = []
     for _ in range(5):
         scores.append(compute_acc())
