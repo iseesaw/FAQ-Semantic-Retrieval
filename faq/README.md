@@ -1,6 +1,6 @@
 # FAQ-Semantic-Retrieval
 
-![](https://img.shields.io/badge/python-≥3.6-blue?style=for-the-badge&logo=python&link=https://pytorch.org/)![](https://img.shields.io/badge/pytorch-1.6.0-yello?style=for-the-badge&logo=pytorch&link=https://pytorch.org/)![](https://img.shields.io/badge/transformers-≥3.0.2-orange?style=for-the-badge&link=https://huggingface.co/landing/assets/transformers-docs/huggingface_logo.svg)
+![](https://img.shields.io/badge/python-≥3.6-blue?style=for-the-badge&logo=python&link=https://pytorch.org/)  ![](https://img.shields.io/badge/pytorch-1.6.0-yello?style=for-the-badge&logo=pytorch&link=https://pytorch.org/)  ![](https://img.shields.io/badge/transformers-≥3.0.2-orange?style=for-the-badge&link=https://huggingface.co/landing/assets/transformers-docs/huggingface_logo.svg) 
 
 一种 FAQ 向量语义检索解决方案
 
