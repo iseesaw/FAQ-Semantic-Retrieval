@@ -394,7 +394,7 @@ CUDA_VISIBLE_DEVICES=0 python model_distillation.py \
 
 | model                                                        | hit@1(chitchat-faq-small) | hit@1(entity-faq-large) |
 | ------------------------------------------------------------ | ------------------------- | ----------------------- |
-| *lucene bm25 (online)*                                       | 0.6679                    | -                       |
+| *lucene bm25 (origin)*                                       | 0.6679                    | -                       |
 | bert-base-chinese                                            | 0.7394                    | 0.7745                  |
 | bert-base-chinese<br />:point_up_2: *6 layers*               | 0.7276                    | -                       |
 | SiameseNetwork<br />:steam_locomotive: chit-faq-small        | 0.8567                    | 0.8500                  |
@@ -434,16 +434,16 @@ CUDA_VISIBLE_DEVICES=0 python model_distillation.py \
   - **cache** 的使用能够大大提高并发量和响应速度（最大缓存均设置为**500**）
   - 最终推荐配置 :fire: **TransformersEncoder + FastAPI  + functools.lru_cache**
 
-| model                                                     | Web         | Cache         | User   | reqs    | fails | Avg   | Min  | Max     | Median | req/s      | fails/s |
-| --------------------------------------------------------- | ----------- | ------------- | ------ | ------- | ----- | ----- | ---- | ------- | ------ | ---------- | ------- |
-| *lucene bm25 (online)*                                    | *flask*     | *werkzeug*    | *1000* | *48969* | *0*   | *91*  | *3*  | *398*   | *79*   | **271.75** | 0.00    |
-| BertSiameseNet<br/>​​6 layers <br/>Transformers             | flask       | flask-caching | 1000   | 4424    | 654(  | 28005 | 680  | 161199  | 11000  | 24.55      | 3.63    |
-| BertSiameseNet<br/>6 layers <br />Transformers            | **fastapi** | lru_cache     | 1000   | 23566   | 1725  | 3884  | 6    | 127347  | 26     | **130.87** | 9.58    |
-| *lucene bm25 (online)*                                    | *flask*     | *werkzeug*    | *100*  | *4973*  | *1*   | *32*  | *6*  | *60077* | *10*   | **27.66**  | 0.01    |
-| BertSiameseNet<br/>6 layers <br/>bert-as-service          | flask       | flask-caching | 100    | 987     | 0     | 13730 | 357  | 17884   | 14000  | 5.49       | 0.00    |
-| BertSiameseNet<br/>6 layers <br />Transformers            | flask       | flask-caching | 100    | 1066    | 0     | 12379 | 236  | 17062   | 12000  | 5.93       | 0.00    |
-| BertSiameseNet<br/>:fire: 6 layers <br />**Transformers** | **fastapi** | **lru_cache** | 100    | 3993    | 0     | 824   | 10   | 2402    | 880    | **22.19**  | 0.00    |
-| BertSiameseNet<br/>6 layers<br />transformers             | fastapi     | None          | 100    | 1900    | 0     | 1876  | 138  | 3469    | 1900   | 18.17      | 0.00    |
+| model                                                     | Web         | Cache         | Users  | req/s      | reqs    | fails | Avg   | Min  | Max     | Median | fails/s |
+| --------------------------------------------------------- | ----------- | ------------- | ------ | ---------- | ------- | ----- | ----- | ---- | ------- | ------ | ------- |
+| *lucene bm25 (origin)*                                    | *flask*     | *werkzeug*    | *1000* | **271.75** | *48969* | *0*   | *91*  | *3*  | *398*   | *79*   | 0.00    |
+| BertSiameseNet<br/>​​6 layers <br/>Transformers             | flask       | flask-caching | 1000   | 24.55      | 4424    | 654   | 28005 | 680  | 161199  | 11000  | 3.63    |
+| BertSiameseNet<br/>6 layers <br />Transformers            | **fastapi** | lru_cache     | 1000   | **130.87** | 23566   | 1725  | 3884  | 6    | 127347  | 26     | 9.58    |
+| *lucene bm25 (origin)*                                    | *flask*     | *werkzeug*    | *100*  | **27.66**  | *4973*  | *1*   | *32*  | *6*  | *60077* | *10*   | 0.01    |
+| BertSiameseNet<br/>6 layers <br/>bert-as-service          | flask       | flask-caching | 100    | 5.49       | 987     | 0     | 13730 | 357  | 17884   | 14000  | 0.00    |
+| BertSiameseNet<br/>6 layers <br />Transformers            | flask       | flask-caching | 100    | 5.93       | 1066    | 0     | 12379 | 236  | 17062   | 12000  | 0.00    |
+| BertSiameseNet<br/>:fire: 6 layers <br />**Transformers** | **fastapi** | **lru_cache** | 100    | **22.19**  | 3993    | 0     | 824   | 10   | 2402    | 880    | 0.00    |
+| BertSiameseNet<br/>6 layers<br />transformers             | fastapi     | None          | 100    | 18.17      | 1900    | 0     | 1876  | 138  | 3469    | 1900   | 0.00    |
 
 > 使用 bert-as-service 遇到的一些问题：
 >
