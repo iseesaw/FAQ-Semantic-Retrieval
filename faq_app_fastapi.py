@@ -48,7 +48,7 @@ def read_root():
     return {"Hello": "World"}
 
 
-# @lru_cache(maxsize=512)
+@lru_cache(maxsize=512)
 def get_res(query):
     enc = encoder.encode([query])
     scores = cos_sim(np.squeeze(enc, axis=0), corpus_mat, corpus_mat_norm)

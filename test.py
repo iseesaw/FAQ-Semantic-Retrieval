@@ -24,7 +24,7 @@ from sentence_transformers import SentenceTransformer, util, models
 from transformers import BertTokenizer, BertModel
 
 from utils import load_json, cos_sim, save_json
-from bert_serving.client import BertConfig
+
 
 def construct_pos():
     '''根据faq数据构造正例
@@ -209,7 +209,7 @@ def compute_acc():
     #                                                     labels,
     #                                                     test_size=0.1)
 
-    proj = 'ddqa'
+    proj = 'hflqa'
     X_train, y_train = load_faq(f'{proj}/train_faq.json')
     X_test, y_test = load_faq(f'{proj}/test_faq.json')
 
@@ -330,6 +330,25 @@ def for_index():
         train_faq[topic]['resp'] = faq[topic]['resp']
     save_json(train_faq, 'hflqa/test_faq_resp.json')
 
+def req_test():
+    import requests
+    url = '###'
+    data = load_json('hflqa/test_faq_resp.json')
+    hits = total = fails = 0
+    st = time.time()
+    for _, post_resp in tqdm(data.items()):
+        resp = set(post_resp.get('resp'))
+        for post in post_resp.get('post'):
+            try:
+                reply = requests.post(url=url, json={'query': post}, timeout=1000)
+                if reply.json().get('reply') in resp:
+                    hits += 1
+            except:
+                fails += 1
+            finally:
+                total += 1
+    print(f'hits = {hits}, fails = {fails}, total = {total}, avg.sec = {(time.time()-st)/total}')
+
 if __name__ == '__main__':
     # dis_test()
     # sentence_transformers_test()
@@ -344,3 +363,4 @@ if __name__ == '__main__':
     # merge()
     # export_ddqa()
     # save_pretrained_model()
+    req_test()
