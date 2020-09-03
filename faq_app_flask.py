@@ -4,7 +4,6 @@
 # @Author  : Kaiyan Zhang (minekaiyan@gmail.com)
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
-from bert_serving.client import BertClient
 
 import time
 import random
@@ -43,8 +42,7 @@ def init_data():
 
 print('start loading')
 faq_data, topics, corpus_mat, corpus_mat_norm = init_data()
-# encoder = TransformersEncoder(model_name_or_path=model_name_or_path)
-encoder = BertClient()
+encoder = TransformersEncoder(model_name_or_path=model_name_or_path)
 print('end loading...')
 
 
