@@ -4,13 +4,13 @@
 
 一种 FAQ 向量语义检索解决方案
 
-- [x] 基于 Sklearn Kmeans 的负采样
+- [x] 基于 [**Sklearn Kmeans**](https://scikit-learn.org/stable/) 聚类的**负采样**
 
-- [x] 基于 Transformers 的 BertForSiameseNetwork（Bert双塔模型）微调训练
+- [x] 基于 [**Transformers**](https://huggingface.co/transformers/) 的 BertForSiameseNetwork（Bert**双塔模型**）**微调训练**
 
-- [x] 基于 TextBrewer 的模型蒸馏
+- [x] 基于 [**TextBrewer**](https://github.com/airaria/TextBrewer) 的**模型蒸馏**
 
-- [x] 基于 ~~Flask~~ FastAPI 和 Locust 的 Web服务以及压力测试
+- [x] 基于 [**FastAPI**](https://fastapi.tiangolo.com/zh/) 和 [**Locust**](https://locust.io/) 的 **WebAPI 服务**以及**压力测试**
 
 
 
@@ -18,9 +18,9 @@
 
 FAQ 的处理流程一般为：
 
-- 问题理解，对用户 query 进行改写以及向量表示
-- 召回模块，在问题集上进行候选问题召回，获得 topk（基于关键字的倒排索引 vs 基于向量的语义召回）
-- 排序模块，对 topk 进行精排序
+- **问题理解**，对用户 query 进行改写以及向量表示
+- **召回模块**，在问题集上进行候选问题召回，获得 topk（基于关键字的倒排索引 vs 基于向量的语义召回）
+- **排序模块**，对 topk 进行精排序
 
 本项目着眼于 **召回模块** 的 **向量检索** 的实现，适用于 **小规模 FAQ 问题集**（候选问题集<10万）的系统快速搭建
 
@@ -213,10 +213,16 @@ fine-tune 过程主要进行**文本相似度计算**任务，亦**句对分类�
 
 ### FAQ Web服务
 
-#### Flask Web API
+#### Web API
 
-- Flask + Gunicorn + gevent + nginx ，进程管理（自启动）（uwsgi 同理，gunicorn 更简单）
-- [flask-caching](https://github.com/sh4nks/flask-caching) ，进行问题查询结果缓存
+- Web 框架选择
+  - [Flask](https://flask.palletsprojects.com/) + Gunicorn + gevent + nginx ，进程管理（崩溃自动重启）（uwsgi 同理，gunicorn 更简单）
+  - :fire: **[FastAPI](https://fastapi.tiangolo.com/)** + uvicorn（崩溃自动重启），最快的Python Web框架（实测的确比 Flask 快几倍）
+- cache 缓存机制（保存最近的query对应的topic，命中后直接返回）
+  - Flask 相关
+    - [flask-caching](https://github.com/sh4nks/flask-caching) （默认缓存500，超时300秒），使用 set/get 进行数据操作；项目来源于 [pallets/werkzeug](https://github.com/pallets/werkzeug) （werkzeug 版本0.4以后弃用 cache）
+  - Python 3.2 以上自带（FastAPI 中可使用）
+    - :fire: [**functools.lru_cache()**](https://docs.python.org/3/library/functools.html#functools.lru_cache) （默认缓存128，lru策略），装饰器，缓存函数输入和输出
 
 
 
@@ -345,19 +351,23 @@ CUDA_VISIBLE_DEVICES=0 python model_distillation.py \
 
 ### Web服务
 
-- 服务启动
+- 服务启动（`gunicorn` 和 `uvicorn` 均多进程启动以及支持失败重启）
+  - [Flask](https://flask.palletsprojects.com/)
 
-```bash
-gunicorn -w 1 -b 127.0.0.1:8888 faq_app:app
-```
+    ```bash
+    gunicorn -w 1 -b 127.0.0.1:8888 faq_app_flask:app
+    ```
+  
+  - [FaskAPI](https://fastapi.tiangolo.com/) :fire: （推荐） ​
+  
+    ```bash
+    uvicorn faq_app_fastapi:app --reload --port=8888
+    ```
+  
 
 
 
-- 压力测试
-
-```bash
-python locust_test.py
-```
+- 压力测试 [Locust](https://docs.locust.io/en/stable/) ，实现脚本参考 `locust_test.py`
 
 
 
@@ -389,16 +399,16 @@ python locust_test.py
 | bert-base-chinese<br />:point_up_2: *6 layers*               | 0.7276                    | -                       |
 | SiameseNetwork<br />:steam_locomotive: chit-faq-small        | 0.8567                    | 0.8500                  |
 | SiameseNetwork<br />:steam_locomotive: chitchat-faq-small + entity-faq-large | 0.8980                    | **0.9961**              |
-| :point_up_2: *6 layers*                                      | **0.9128**                | 0.8201                  |
+| :point_up_2: *6 layers* :fire:                               | **0.9128**                | 0.8201                  |
 
 - **chitchat-faq-small**
   - 测试集 hit@1 大约 85% 左右
   - 错误原因主要是 hflqa 数据问题
-    - 存在意思相同的 topic，自动评测无法区分，认定为失败（实际是正确的）
+    - 数据质量问题，部分 topic 意思相同，可以合并
     - 一些不常用表达或者表达不完整的句子
-    - 正常对话的召回率较高
-- chitchat-faq-small + entity-faq-large
-  - 2000 chitchat-faq-small 测试集，6层比12层效果好一个点，hit@1 约 90%
+    - 正常对话的召回率还是不错的
+- **chitchat-faq-small + entity-faq-large**
+  - 2000 chitchat-faq-small 测试集，6层比12层效果好一个点，hit@1 达到 90%
   - 10000 entity-faq-large 测试集，12层 hit@1 达到 99%，6层只有 82%
   - 底层学到了较为基础的特征，在偏向闲聊的 chitchat-faq-small 上仅使用6层效果超过12层（没有蒸馏必要）
   - 高层学到了较为高级的特征，在偏向实体的 entity-faq-large 上12层效果远超于6层
@@ -408,55 +418,38 @@ python locust_test.py
 
 ### Web服务压测
 
-- 运行命令
+- 运行命令说明
 
-  > 总共 100 个模拟用户，启动时每秒递增 10 个，压力测试持续 1 分钟
+  > 总共 100 个模拟用户，启动时每秒递增 10 个，压力测试持续 3 分钟
 
   ```bash
-  locust  -f locust_test.py  --host=http://127.0.0.1:8889/module --headless -u 100 -r 10 -t 1m
+  locust  -f locust_test.py  --host=http://127.0.0.1:8889/module --headless -u 100 -r 10 -t 3m
   ```
 
 
 
-- 4核8G CPU （6层小模型占用内存约 700MB）
+- :hourglass: 配置 **4核8G CPU** （6层小模型占用内存约 700MB）
+  - 小服务器上 **bert-as-service** 服务非常不稳定（tensorflow各种报错）， 效率不如简单封装的 **TransformersEncoder** 
+  - **FastAPI** 框架速度远胜于 **Flask**，的确堪称最快的 Python Web 框架
+  - **cache** 的使用能够大大提高并发量和响应速度（最大缓存均设置为**500**）
+  - 最终推荐配置 :fire: **TransformersEncoder + FastAPI  + functools.lru_cache**
 
-> 注意，Flask 中使用了 cache，所以遇到重复的句子回复速度将非常快
+| model                                                     | Web         | Cache         | User   | reqs    | fails | Avg   | Min  | Max     | Median | req/s      | fails/s |
+| --------------------------------------------------------- | ----------- | ------------- | ------ | ------- | ----- | ----- | ---- | ------- | ------ | ---------- | ------- |
+| *lucene bm25 (online)*                                    | *flask*     | *werkzeug*    | *1000* | *48969* | *0*   | *91*  | *3*  | *398*   | *79*   | **271.75** | 0.00    |
+| BertSiameseNet<br/>​​6 layers <br/>Transformers             | flask       | flask-caching | 1000   | 4424    | 654(  | 28005 | 680  | 161199  | 11000  | 24.55      | 3.63    |
+| BertSiameseNet<br/>6 layers <br />Transformers            | **fastapi** | lru_cache     | 1000   | 23566   | 1725  | 3884  | 6    | 127347  | 26     | **130.87** | 9.58    |
+| *lucene bm25 (online)*                                    | *flask*     | *werkzeug*    | *100*  | *4973*  | *1*   | *32*  | *6*  | *60077* | *10*   | **27.66**  | 0.01    |
+| BertSiameseNet<br/>6 layers <br/>bert-as-service          | flask       | flask-caching | 100    | 987     | 0     | 13730 | 357  | 17884   | 14000  | 5.49       | 0.00    |
+| BertSiameseNet<br/>6 layers <br />Transformers            | flask       | flask-caching | 100    | 1066    | 0     | 12379 | 236  | 17062   | 12000  | 5.93       | 0.00    |
+| BertSiameseNet<br/>:fire: 6 layers <br />**Transformers** | **fastapi** | **lru_cache** | 100    | 3993    | 0     | 824   | 10   | 2402    | 880    | **22.19**  | 0.00    |
+| BertSiameseNet<br/>6 layers<br />transformers             | fastapi     | None          | 100    | 1900    | 0     | 1876  | 138  | 3469    | 1900   | 18.17      | 0.00    |
 
-| model                                                        | reqs  | \# fails    | Avg   | Min  | Max    | Median | req/s      | failures/s |
-| ------------------------------------------------------------ | ----- | ----------- | ----- | ---- | ------ | ------ | ---------- | ---------- |
-| *lucene bm25 (online)*  flask 1000u                          | 48969 | 0           | 91    | 3    | 398    | 79     | **271.75** | 0.00       |
-| *lucene bm25 (online)*  flask 100u                           | 4973  | 1           | 32    | 6    | 60077  | 10     | **27.66**  | 0.01       |
-| BertForSiameseNetwork<br />6 layers flask 1000u Transformers | 4424  | 654(14.78%) | 28005 | 680  | 161199 | 11000  | 24.55      | 3.63       |
-| :point_up_2: flask 100u bert-as-service                      | 987   | 0           | 13730 | 357  | 17884  | 14000  | 5.49       | 0.00       |
-| :point_up_2: flask ​100u Transformers                         | 1066  | 0           | 12379 | 236  | 17062  | 12000  | 5.93       | 0.00       |
-| :point_up_2: **fastapi** 100u Transformers                   | 4545  | 0           | 271   | 8    | 2136   | 31     | **25.25**  | 0.00       |
-| :point_up_2: **fastapi** 1000u Transformers                  | 23566 | 1725(7.32%) | 3884  | 6    | 127347 | 26     | 130.87     | 9.58       |
-
-> 老版本服务器上使用 [tensorflow 报错解决方案 Error in `python': double free or corruption (!prev) #6968](https://github.com/tensorflow/tensorflow/issues/6968#issuecomment-279060156)
+> 使用 bert-as-service 遇到的一些问题：
 >
-> 报错 src/tcmalloc.cc:277] Attempt to free invalid pointer 0x7f4685efcd40 Aborted (core dumpe），解决方案，将 bert_as_service import 移到顶部
+> - 老版本服务器上使用 [tensorflow 报错解决方案 Error in `python': double free or corruption (!prev) #6968](https://github.com/tensorflow/tensorflow/issues/6968#issuecomment-279060156)
 >
-> :fire: [FastAPI](https://fastapi.tiangolo.com/) 实在是太快了！！！100用户并发情况下基本能够达到 lucene 的 REQ
-
-
-
-- Tesla P100 16G
-
-  > `locust  -f locust_test.py  --host=http://127.0.0.1:8889/module --headless -u 1000 -r 100 -t 3m`
-  >
-  > :fire: 在大内存 GPU 服务器上 bert-as-service 效果较好
-
-  | model                 | reqs  | fails       | Avg  | Min  | Max    | median | req/s  | failures/s |
-  | --------------------- | ----- | ----------- | ---- | ---- | ------ | ------ | ------ | ---------- |
-  | TransformersEncoder   | 17597 | 0           | 6100 | 3    | 22658  | 5100   | 97.63  | 0          |
-  | bert-as-service u1000 | 27978 | 1807(6.46%) | 2539 | 2    | 127282 | 1200   | 155.26 | 10.03      |
-  | bert-as-service u100  | 5040  | 0           | 11   | 2    | 292    | 11     | 28.01  | 0          |
-
-  ![image-20200903024258644](/Users/kaiyan/Library/Application Support/typora-user-images/image-20200903024258644.png)
-
-  ![image-20200903025751977](/Users/kaiyan/Library/Application Support/typora-user-images/image-20200903025751977.png)
-
-  ![image-20200903031530211](/Users/kaiyan/Library/Application Support/typora-user-images/image-20200903031530211.png)
+> - 报错 src/tcmalloc.cc:277] Attempt to free invalid pointer 0x7f4685efcd40 Aborted (core dumpe），解决方案，将 bert_as_service import 移到顶部
 
 
 
