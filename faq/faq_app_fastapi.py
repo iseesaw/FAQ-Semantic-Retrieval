@@ -9,11 +9,11 @@ import time
 import random
 import logging
 import numpy as np
-from flask import Flask, request, jsonify
-from flask_caching import Cache
-from utils import load_json, cos_sim
 from fastapi import FastAPI
 from pydantic import BaseModel
+from functools import lru_cache
+
+from utils import load_json, cos_sim
 
 model_name_or_path = 'transformers-merge3-bert-6L'
 faq_file = 'hflqa/faq.json'
@@ -38,8 +38,6 @@ faq_data, topics, corpus_mat, corpus_mat_norm = init_data()
 encoder = TransformersEncoder(model_name_or_path=model_name_or_path)
 print('end loading...')
 
-cache = {}
-
 
 class Query(BaseModel):
     query: str
@@ -50,22 +48,25 @@ def read_root():
     return {"Hello": "World"}
 
 
+# @lru_cache(maxsize=512)
+def get_res(query):
+    enc = encoder.encode([query])
+    scores = cos_sim(np.squeeze(enc, axis=0), corpus_mat, corpus_mat_norm)
+    max_index = np.argmax(scores)
+    topic = topics[max_index]
+    return topic
+
+
 @app.post("/module/ext_faq_test")
 def read_item(query: Query):
-    query = query.query
-    topic = cache.get(query, None)
-    if not topic:
-        enc = encoder.encode([query])
-        scores = cos_sim(np.squeeze(enc, axis=0), corpus_mat, corpus_mat_norm)
-        max_index = np.argmax(scores)
-        topic = topics[max_index]
-        cache[query] = topic
-
+    st = time.time()
+    topic = get_res(query.query)
     responses = faq_data[topic]['resp']
     reply = random.choice(responses)
     print('--------------')
     print('Query:', query)
     print('Reply:', reply)
+    print('Takes %f' % (time.time() - st))
     return {'reply': reply}
 
 
