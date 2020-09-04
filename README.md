@@ -58,7 +58,7 @@ $$
 > - **Sentence-Transformers** 进行小规模数据的单 GPU fine-tune 实验（尚不支持多 GPU 训练，[Multi-GPU-training #311](https://github.com/UKPLab/sentence-transformers/issues/311#issuecomment-659455875) ；实现了多种 [Ranking loss](https://www.sbert.net/docs/package_reference/losses.html) 可供参考）
 > - **Transformers** 进行大规模数据的多 GPU fine-tune 训练（推荐自定义模型使用 [Trainer](https://huggingface.co/transformers/training.html#trainer) 进行训练）
 > - 实际使用过程中 **Sentence-Transformers** 和 **Transformers** 模型基本互通互用，前者多了 **Pooling 层（Mean/Max/CLS Pooling）** ，可参考 **Example**
-> - :fire: **实际上线推荐直接使用 Transformers 封装，Sentence-Transformers 在 CPU 上运行存在问题！！！** （并且可以少安装一个包。。）
+> - :fire: **实际上线推荐直接使用 Transformers 封装，Sentence-Transformers 在 CPU 上运行存在问题！！！** 
 
 
 
