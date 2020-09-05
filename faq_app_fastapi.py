@@ -29,7 +29,7 @@ def init_data():
     faq_data = load_json(faq_file)
     corpus_mat = np.load(corpus_mat_file)
     topics = load_json(topics_file)
-    corpus_mat_norm = np.linalg.norm(corpus_mat)
+    corpus_mat_norm = np.linalg.norm(corpus_mat, axis=1)
     return faq_data, topics, corpus_mat, corpus_mat_norm
 
 

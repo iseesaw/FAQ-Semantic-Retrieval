@@ -349,10 +349,42 @@ def req_test():
                 total += 1
     print(f'hits = {hits}, fails = {fails}, total = {total}, avg.sec = {(time.time()-st)/total}')
 
+def request():
+    data = {
+        'content': '\u4f60\u8fd8\u597d\u5417',
+        'msg_type': 'text',
+        'metafield': {
+            'emotion': 'sad',
+            'consumption_class': 0,
+            'ltp': {
+                'seg': '\u4f60 \u8fd8 \u597d \u5417',
+                'arc': '3:SBV 3:ADV 0:HED 3:RAD',
+                'ner': 'O O O O',
+                'pos': 'r d a u'
+            },
+            'consumption_result': 0.0,
+            'multi_turn_status_dict': {},
+            'anaphora_resolution': {
+                'score': 0,
+                'result': ''
+            }
+        },
+        'user': {
+            'id': 'oFeuIs252VLW7ILAKQ1Rh5JViEks'
+        },
+        'context': {}
+    }
+    import requests
+    url = 'http://127.0.0.1:12345/module/FAQ'
+    res = requests.post(url=url, json=data)
+    print(res.json())
+
+
 if __name__ == '__main__':
     # dis_test()
     # sentence_transformers_test()
-    compute_acc()
+    # compute_acc()
+    request()
     # for_index()
     """scores = []
     for _ in range(5):

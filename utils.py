@@ -18,7 +18,7 @@ def cos_sim(query_vec, corpus_mat, corpus_norm_mat=None):
     :param corpus_norm_mat: ndarray, (num_cands) 可提前计算加快速度
     :return: ndarray, (num_cands)
     '''
-    if not corpus_norm_mat:
+    if corpus_norm_mat is None:
         corpus_norm_mat = np.linalg.norm(corpus_mat)
     return np.dot(corpus_mat,
                   query_vec) / (np.linalg.norm(query_vec) * corpus_norm_mat)
