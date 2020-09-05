@@ -10,7 +10,6 @@ import numpy as np
 
 from utils import load_json, cos_sim
 from transformers_encoder import TransformersEncoder
-from bert_serving.client import BertClient
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
@@ -19,19 +18,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def init_data():
+def init_data(model):
     """加载数据
     """
     faq_data = load_json('hflqa/faq.json')
-    corpus_mat = np.load('hflqa/corpus_mat.npy')
-    topics = load_json('hflqa/topics.json')
+    posts, topics = [], []
+    for topic, qas in faq_data.items():
+        for post in qas['post']:
+            posts.append(post)
+            topics.append(topic)
+
+    encs = model.encode(posts, show_progress_bar=True)
+    corpus_mat = encs.numpy()
     corpus_mat_norm = np.linalg.norm(corpus_mat)
     return faq_data, topics, corpus_mat, corpus_mat_norm
 
 
 print('start loading')
-faq_data, topics, corpus_mat, corpus_mat_norm = init_data()
-model = BertClient() #TransformersEncoder('./output/transformers-merge3-bert-6L')
+model_path = './output/transformers-merge3-bert/'
+model = TransformersEncoder(model_path)
+faq_data, topics, corpus_mat, corpus_mat_norm = init_data(model)
 print('end loading...')
 
 

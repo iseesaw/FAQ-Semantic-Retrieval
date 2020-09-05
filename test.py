@@ -186,10 +186,10 @@ def load_faq(filename='hflqa/faq.json'):
 
 def compute_acc():
     is_transformers = True
-    model_path = '/users6/kyzhang/embeddings/bert/bert-base-chinese'
+    # model_path = '/users6/kyzhang/embeddings/bert/bert-base-chinese'
     # model_path = './output/training-OnlineConstrativeLoss-hflqa-beta1.5-gmm-bert/0_BERT'
     # model_path = './output/transformers-merge-bert-base-chinese'
-    # model_path = './output/transformers-merge3-bert'
+    model_path = './output/transformers-merge3-bert'
     if is_transformers:
         # 使用 BERT 作为 encoder
         word_embedding_model = models.BERT(model_path)
@@ -352,7 +352,7 @@ def req_test():
 if __name__ == '__main__':
     # dis_test()
     # sentence_transformers_test()
-    # compute_acc()
+    compute_acc()
     # for_index()
     """scores = []
     for _ in range(5):
@@ -363,4 +363,4 @@ if __name__ == '__main__':
     # merge()
     # export_ddqa()
     # save_pretrained_model()
-    req_test()
+    # req_test()

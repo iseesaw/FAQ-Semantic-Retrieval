@@ -6,7 +6,8 @@
 # @Version : 1.0.0
 import numpy as np
 
-from utils import load_json, save_json, get_model
+from utils import load_json, save_json
+from transformers_encoder import TransformersEncoder
 
 
 def index_query():
@@ -28,7 +29,7 @@ def index_query():
             posts.append(post)
             topics.append(topic)
 
-    encoder = get_model('./output/transformers-merge3-bert-6L')
+    encoder = TransformersEncoder('./output/transformers-merge3-bert-6L')
 
     encs = encoder.encode(posts, show_progress_bar=True)
 

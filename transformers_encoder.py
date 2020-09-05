@@ -4,7 +4,11 @@
 # @Author  : Kaiyan Zhang (minekaiyan@gmail.com)
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
+import numpy as np
+from tqdm import tqdm
+
 import torch
+from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, AutoModel
 
 
@@ -14,7 +18,8 @@ class TransformersEncoder:
     def __init__(
         self,
         model_name_or_path='/users6/kyzhang/embeddings/bert/bert-base-chinese',
-        max_length=128):
+        max_length=128,
+        batch_size=128):
         """初始化
 
         Args:
@@ -29,12 +34,12 @@ class TransformersEncoder:
         # gpu & cpu
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print('using', self.device)
-        self.model.to(self.device) 
+        self.model.to(self.device)
         self.model.eval()
-        
-        self.max_length = max_length
-        print('ending initing')
 
+        self.max_length = max_length
+        self.batch_size = batch_size
+        print('ending initing')
 
     def _assign_device(self, Tokenizer_output):
         """将tensor转移到gpu
@@ -43,9 +48,11 @@ class TransformersEncoder:
         token_type_ids = Tokenizer_output['token_type_ids'].to(self.device)
         attention_mask = Tokenizer_output['attention_mask'].to(self.device)
 
-        output = {'input_ids' : tokens_tensor, 
-                'token_type_ids' : token_type_ids, 
-                'attention_mask' : attention_mask}
+        output = {
+            'input_ids': tokens_tensor,
+            'token_type_ids': token_type_ids,
+            'attention_mask': attention_mask
+        }
 
         return output
 
@@ -74,42 +81,50 @@ class TransformersEncoder:
         sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
         return sum_embeddings / sum_mask
 
-    def encode(self, sentences):
+    def encode(self, sentences, show_progress_bar=False):
         """句向量编码器
 
         Args:
             sentences (List[str]): (batch_size)
 
         Returns:
-            Tensor: (batch_size, hidden_size)
+            tensor: (batch_size, hidden_size)
         """
         # Tokenize sentences
-        encoded_input = self.tokenizer(sentences,
-                                       padding=True,
-                                       truncation=True,
-                                       max_length=self.max_length,
-                                       return_tensors='pt')
-        
-        encoded_input = self._assign_device(encoded_input)
+        dataloader = DataLoader(sentences,
+                                batch_size=self.batch_size,
+                                shuffle=False)
+        dataloader = tqdm(dataloader) if show_progress_bar else dataloader
+        sentence_embeddings: torch.Tensor = None
         # Compute token embeddings
         with torch.no_grad():
             # (sequence_output, pooled_output, (hidden_states), (attentions))
             # sequence_output, (batch_size, sequence_length, hidden_size))
             #   Sequence of hidden-states at the output of the last layer of the model.
             # pooled_output, (batch_size, hidden_size))
-            #   Last layer hidden-state of the first token of the sequence (classification token) 
-            #   further processed by a Linear layer and a Tanh activation function. 
-            #   The Linear layer weights are trained from the next sentence prediction 
+            #   Last layer hidden-state of the first token of the sequence (classification token)
+            #   further processed by a Linear layer and a Tanh activation function.
+            #   The Linear layer weights are trained from the next sentence prediction
             #   (classification) objective during pre-training.
             #   not a good summary of the semantic content of the input
             #   it's better with averaging or pooling the sequence of hidden-states for the whole input sequence
-            model_output = self.model(**encoded_input)
+            for batch_sentences in dataloader:
+                encoded_input = self.tokenizer(batch_sentences,
+                                               padding=True,
+                                               truncation=True,
+                                               max_length=self.max_length,
+                                               return_tensors='pt')
+                encoded_input = self._assign_device(encoded_input)
+                model_output = self.model(**encoded_input)
 
-        # Perform pooling. In this case, mean pooling
-        sentence_embeddings = self._mean_pooling(
-            model_output, encoded_input['attention_mask'])
+                # Perform pooling. In this case, mean pooling
+                batch_embeddings = self._mean_pooling(
+                    model_output, encoded_input['attention_mask'])
+                sentence_embeddings = batch_embeddings if sentence_embeddings is None else torch.cat(
+                    [sentence_embeddings, batch_embeddings], dim=0)
 
         return sentence_embeddings
+
 
 if __name__ == '__main__':
     # pip install transformers==3.0.2 ([Optional] torch==1.6.0)
