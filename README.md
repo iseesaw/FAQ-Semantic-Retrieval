@@ -448,8 +448,9 @@ CUDA_VISIBLE_DEVICES=0 python model_distillation.py \
 > 使用 bert-as-service 遇到的一些问题：
 >
 > - 老版本服务器上使用 [tensorflow 报错解决方案 Error in `python': double free or corruption (!prev) #6968](https://github.com/tensorflow/tensorflow/issues/6968#issuecomment-279060156)
->
 > - 报错 src/tcmalloc.cc:277] Attempt to free invalid pointer 0x7f4685efcd40 Aborted (core dumpe），解决方案，将 bert_as_service import 移到顶部
+>
+> 测试服部署时报错 src/tcmalloc.cc:277] Attempt to free invalid pointer，通过改变import顺序来解决，在 `numpy` 之后 import pytorch
 
 
 

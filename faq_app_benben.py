@@ -4,7 +4,6 @@
 # @Author  : Kaiyan Zhang (minekaiyan@gmail.com)
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
-from transformers_encoder import TransformersEncoder
 import time
 import random
 import logging
@@ -15,6 +14,7 @@ from pydantic import BaseModel
 from functools import lru_cache
 
 from utils import load_json, cos_sim
+from transformers_encoder import TransformersEncoder
 
 ##### 日志配置 #####
 logger = logging.getLogger()
