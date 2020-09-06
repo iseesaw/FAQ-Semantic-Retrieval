@@ -58,7 +58,7 @@ $$
 > - **Sentence-Transformers** 进行小规模数据的单 GPU fine-tune 实验（尚不支持多 GPU 训练，[Multi-GPU-training #311](https://github.com/UKPLab/sentence-transformers/issues/311#issuecomment-659455875) ；实现了多种 [Ranking loss](https://www.sbert.net/docs/package_reference/losses.html) 可供参考）
 > - **Transformers** 进行大规模数据的多 GPU fine-tune 训练（推荐自定义模型使用 [Trainer](https://huggingface.co/transformers/training.html#trainer) 进行训练）
 > - 实际使用过程中 **Sentence-Transformers** 和 **Transformers** 模型基本互通互用，前者多了 **Pooling 层（Mean/Max/CLS Pooling）** ，可参考 **Example**
-> - :fire: **实际上线推荐直接使用 Transformers 封装，Sentence-Transformers 在 CPU 上运行存在问题！！！** 
+> - :fire: **实际上线推荐直接使用 Transformers 封装**，Sentence-Transformers 在 CPU 服务器上运行存在位置问题。
 
 
 
@@ -196,6 +196,8 @@ fine-tune 过程主要进行**文本相似度计算**任务，亦**句对分类�
 
 实验中对已有 FAQ 数据集中所有主题的 post 进行 **9:1** 划分得到训练集和测试集，负采样结果对比
 
+> `chitchat-faq-small` 为需要上线的 FAQ 闲聊数据，`entity-faq-large` 为辅助数据
+
 | dataset                       | topics | posts | positive(sampling) | negative(sampling) | total(sampling) |
 | ----------------------------- | ------ | ----- | ------------------ | ------------------ | --------------- |
 | chitchat-faq-small<br />train | 1468   | 18267 | 5w+                | 5w+                | 10w+            |
@@ -207,7 +209,7 @@ fine-tune 过程主要进行**文本相似度计算**任务，亦**句对分类�
 
 #### 模型蒸馏
 
-使用基于 Transformers 的模型蒸馏工具 [TextBrewer](https://github.com/airaria/TextBrewer) ，参考 [官方 入门示例](https://github.com/airaria/TextBrewer/tree/master/examples/random_tokens_example) 和[cmrc2018示例](https://github.com/airaria/TextBrewer/tree/master/examples/cmrc2018_example)
+使用基于 Transformers 的模型蒸馏工具 [TextBrewer](https://github.com/airaria/TextBrewer) ，主要参考 [官方 入门示例](https://github.com/airaria/TextBrewer/tree/master/examples/random_tokens_example) 和[cmrc2018示例](https://github.com/airaria/TextBrewer/tree/master/examples/cmrc2018_example)
 
 
 
@@ -351,14 +353,14 @@ CUDA_VISIBLE_DEVICES=0 python model_distillation.py \
 
 ### Web服务
 
-- 服务启动（`gunicorn` 和 `uvicorn` 均多进程启动以及支持失败重启）
+- 服务启动（`gunicorn` 和 `uvicorn` 均支持多进程启动以及失败重启）
   - [Flask](https://flask.palletsprojects.com/)
 
     ```bash
     gunicorn -w 1 -b 127.0.0.1:8888 faq_app_flask:app
     ```
   
-  - [FaskAPI](https://fastapi.tiangolo.com/) :fire: （推荐） ​
+  - [FastAPI](https://fastapi.tiangolo.com/) :fire: （推荐） ​
   
     ```bash
     uvicorn faq_app_fastapi:app --reload --port=8888
