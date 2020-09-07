@@ -14,6 +14,5 @@ textbrewer==0.2.0.1
 torch==1.6.0+cu92
 tqdm==4.30.0
 transformers==3.0.2
-Werkzeug==0.15.6
 fastapi==0.61.1
 uvicorn==0.11.8
