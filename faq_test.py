@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 def init_data(model):
     """加载数据
     """
-    faq_data = load_json('hflqa/faq.json')
+    faq_data = load_json('ext_hflqa/clean_faq.json')
     posts, topics = [], []
     for topic, qas in faq_data.items():
         for post in qas['post']:

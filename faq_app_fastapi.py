@@ -15,10 +15,10 @@ from functools import lru_cache
 
 from utils import load_json, cos_sim
 
-model_name_or_path = 'transformers-merge3-bert-6L'
-faq_file = 'hflqa/faq.json'
-corpus_mat_file = 'hflqa/corpus_mat.npy'
-topics_file = 'hflqa/topics.json'
+model_name_or_path = 'output/transformers-merge3-bert-6L'
+faq_file = 'ext_hflqa/clean_faq.json'
+corpus_mat_file = 'ext_hflqa/corpus_mat.npy'
+topics_file = 'ext_hflqa/topics.json'
 
 app = FastAPI()
 
