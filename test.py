@@ -379,13 +379,21 @@ def request():
     res = requests.post(url=url, json=data)
     print(res.json())
 
+import json
+def count_faq():
+    with open("ext_hflqa/clean_faq.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+    print("topic", len(data))
+    print("post", sum([len(v["post"]) for k, v in data.items()]))
+    print("resp", sum([len(v["resp"]) for k, v in data.items()]))
 
 if __name__ == '__main__':
     # dis_test()
     # sentence_transformers_test()
     # compute_acc()
-    request()
+    # request()
     # for_index()
+    count_faq()
     """scores = []
     for _ in range(5):
         scores.append(compute_acc())

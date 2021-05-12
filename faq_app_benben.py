@@ -4,6 +4,7 @@
 # @Author  : Kaiyan Zhang (minekaiyan@gmail.com)
 # @Link    : https://github.com/iseesaw
 # @Version : 1.0.0
+import os
 import time
 import random
 import logging
@@ -12,8 +13,9 @@ import numpy as np
 from fastapi import FastAPI
 from pydantic import BaseModel
 from functools import lru_cache
+from annoy import AnnoyIndex
 
-from utils import load_json, cos_sim
+from utils import load_json
 from transformers_encoder import TransformersEncoder
 
 ##### 日志配置 #####
@@ -31,51 +33,55 @@ logger.addHandler(chlr)
 logger.addHandler(fhlr)
 
 ##### 模型文件配置 #####
-model_name_or_path = 'output/transformers-merge3-bert-6L'
-faq_file = 'hflqa/faq.json'
-corpus_mat_file = 'hflqa/corpus_mat.npy'
-topics_file = 'hflqa/topics.json'
+FEAT_DIM = 768
+TOPK = 10
+
+prefix = "/data/benben/data/faq_bert/"
+# prefix = "/users6/kyzhang/benben/FAQ-Semantic-Retrieval"
+MODEL_NAME_OR_PATH = os.path.join(prefix, "output/transformers-merge3-bert-6L")
+FAQ_FILE = os.path.join(prefix, "ext_hflqa/clean_faq.json")
+ANNOY_INDEX_FILE = os.path.join(prefix, "ext_hflqa/index.ann")
+IDX2TOPIC_FILE = os.path.join(prefix, "ext_hflqa/idx2topic.json")
+VEC_FILE = os.path.join(prefix, "ext_hflqa/vec.npy")
 
 app = FastAPI()
 
-
-def init_data():
-    """加载数据
-    通过 faq_index.py 生成
-    """
-    faq_data = load_json(faq_file)
-    corpus_mat = np.load(corpus_mat_file)
-    topics = load_json(topics_file)
-    corpus_mat_norm = np.linalg.norm(corpus_mat, axis=1)
-    return faq_data, topics, corpus_mat, corpus_mat_norm
-
-
 logger.info('加载数据并初始化模型')
-faq_data, topics, corpus_mat, corpus_mat_norm = init_data()
-encoder = TransformersEncoder(model_name_or_path=model_name_or_path)
+
+logger.info("加载FAQ源文件")
+faq = load_json(FAQ_FILE)
+idx2topic = load_json(IDX2TOPIC_FILE)
+vectors = np.load(VEC_FILE)
+
+logger.info("加载Annoy索引文件")
+index = AnnoyIndex(FEAT_DIM, metric='angular')
+index.load(ANNOY_INDEX_FILE)
+
+logger.info("加载BERT预训练模型")
+encoder = TransformersEncoder(model_name_or_path=MODEL_NAME_OR_PATH)
 logger.info('初始化结束')
 
 
 class User(BaseModel):
-    id: str
+    id: str = ''
 
 
 class LTP(BaseModel):
-    seg: str
-    arc: str
-    ner: str
-    pos: str
+    seg: str = ''
+    arc: str = ''
+    ner: str = ''
+    pos: str = ''
 
 
 class AnaphoraResolution(BaseModel):
-    score: int
-    result: str
+    score: int = 0
+    result: str = ''
 
 
 class MetaField(BaseModel):
-    emotion: str
-    consumption_class: int
-    consumption_result: float
+    emotion: str = None
+    consumption_class: int = 0
+    consumption_result: float = 0.0
     ltp: LTP
     anaphora_resolution: AnaphoraResolution
     score: Optional[float] = None
@@ -96,21 +102,20 @@ def read_root():
 
 @lru_cache(maxsize=512)
 def get_res(query):
-    enc = encoder.encode([query])
-    scores = cos_sim(np.squeeze(enc, axis=0), corpus_mat, corpus_mat_norm)
-    max_index = np.argmax(scores)
-    #topk=5
-    #top_results = np.argpartition(-scores, range(topk))[0:topk]
-    topic = topics[max_index]
-    score = scores[max_index]
-    return topic, score.item()
+    vector = np.squeeze(encoder.encode([query]), axis=0)
+    res = index.get_nns_by_vector(vector,
+                                  TOPK,
+                                  search_k=-1,
+                                  include_distances=True)
+    topic = idx2topic[str(res[0][0] - 1)]["topic"]
+    return topic, 1 - res[1][0]
 
 
 @app.post("/module/FAQ")
 def read_item(query: Query):
     st = time.time()
     topic, score = get_res(query.content)
-    responses = faq_data[topic]['resp']
+    responses = faq[topic]['resp']
     reply = random.choice(responses)
     logger.info('Query: %s' % query.content)
     logger.info('Reply: %s' % reply)
