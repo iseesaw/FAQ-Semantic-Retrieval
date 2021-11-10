@@ -1,4 +1,6 @@
 .vscode
+ext_hflqa/
+data/
 */.vscode/
 *.npy
 *.pyc
