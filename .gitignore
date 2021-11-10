@@ -1,11 +1,10 @@
 .vscode
-ext_hflqa/
-data/
 */.vscode/
 *.npy
 *.pyc
 *.csv
 hflqa/
+hflqa_extra/
 ddqa/
 lcqmc/
 output/
@@ -18,3 +17,4 @@ __pycache__/
 */__pycache__/
 data/
 whoosh_index/
+*.json
